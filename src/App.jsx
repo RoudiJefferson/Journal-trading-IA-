@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import {
   Plus, X, Trash2, Pencil, TrendingUp, TrendingDown,
   Wallet, Target, Percent, ArrowUpRight, ArrowDownRight, ChevronRight, Image as ImageIcon,
-  Bot, Sparkles, ExternalLink, Link as LinkIcon, MessageSquare
+  Bot, Sparkles, ExternalLink, Link as LinkIcon, MessageSquare, Calendar, ChevronLeft
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer
@@ -34,9 +34,9 @@ const COLORS = {
   accent: "#2962FF",
   accentSoft: "rgba(41, 98, 255, 0.15)",
   gain: "#089981",
-  gainSoft: "rgba(8, 153, 129, 0.15)",
+  gainSoft: "rgba(8, 153, 129, 0.2)",
   loss: "#F23645",
-  lossSoft: "rgba(242, 54, 69, 0.15)",
+  lossSoft: "rgba(242, 54, 69, 0.2)",
 };
 
 const FONT_BODY = "-apple-system, BlinkMacSystemFont, 'Trebuchet MS', Roboto, Ubuntu, sans-serif";
@@ -66,7 +66,7 @@ function fmtMoney(n, opts = {}) {
 function fmtPct(n) {
   if (n === null || n === undefined || Number.isNaN(n)) return "—";
   const sign = n > 0 ? "+" : n < 0 ? "−" : "";
-  return `${sign}${Math.abs(n).toFixed(1)} %`;
+  return `${sign}${Math.abs(n).toFixed(2)} %`;
 }
 
 function fmtDate(d) {
@@ -76,14 +76,12 @@ function fmtDate(d) {
 }
 
 function computePnl(t) {
-  // 1. Si un montant de P&L manuel est saisi
   if (t.manualPnl !== "" && t.manualPnl !== null && t.manualPnl !== undefined) {
     const val = parseNum(t.manualPnl);
     const fees = parseNum(t.fees) || 0;
     return val - fees;
   }
 
-  // 2. Sinon, calcul automatique via le Prix de Sortie
   if (t.exitPrice === "" || t.exitPrice === null || t.exitPrice === undefined) return null;
   const entry = parseNum(t.entryPrice);
   const exit = parseNum(t.exitPrice);
@@ -114,7 +112,7 @@ const emptyForm = {
   direction: "long",
   entryDate: todayISO(),
   entryPrice: "",
-  exitDate: "",
+  exitDate: todayISO(),
   exitPrice: "",
   manualPnl: "",
   stopLoss: "",
@@ -125,6 +123,11 @@ const emptyForm = {
   notes: "",
   screenshot: "",
 };
+
+const MONTH_NAMES = [
+  "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+  "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+];
 
 export default function TradingJournal() {
   const [loaded, setLoaded] = useState(false);
@@ -137,6 +140,7 @@ export default function TradingJournal() {
   const [editingId, setEditingId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [selectedImg, setSelectedImg] = useState(null);
+  const [selectedCalendarYear, setSelectedCalendarYear] = useState(new Date().getFullYear());
 
   useEffect(() => {
     (async () => {
@@ -198,6 +202,47 @@ export default function TradingJournal() {
     const currentBalance = startingBalance + totalPnl;
     const pctChange = startingBalance ? (totalPnl / startingBalance) * 100 : 0;
 
+    // Daily breakdown for calendar
+    const pnlByDate = {};
+    closed.forEach((t) => {
+      const d = t.exitDate || t.entryDate;
+      if (!d) return;
+      pnlByDate[d] = (pnlByDate[d] || 0) + t.pnl;
+    });
+
+    // Timeframe stats
+    const todayStr = todayISO();
+    const now = new Date();
+    
+    // Day
+    const dayPnl = pnlByDate[todayStr] || 0;
+    const dayRoi = startingBalance ? (dayPnl / startingBalance) * 100 : 0;
+
+    // Week
+    const startOfWeek = new Date(now);
+    const dayOfWeek = now.getDay() === 0 ? 6 : now.getDay() - 1;
+    startOfWeek.setDate(now.getDate() - dayOfWeek);
+    startOfWeek.setHours(0,0,0,0);
+
+    // Month
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    let weekPnl = 0;
+    let monthPnl = 0;
+    let yearPnl = 0;
+
+    closed.forEach((t) => {
+      const d = new Date((t.exitDate || t.entryDate) + "T00:00:00");
+      if (d >= startOfWeek) weekPnl += t.pnl;
+      if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) monthPnl += t.pnl;
+      if (d.getFullYear() === currentYear) yearPnl += t.pnl;
+    });
+
+    const weekRoi = startingBalance ? (weekPnl / startingBalance) * 100 : 0;
+    const monthRoi = startingBalance ? (monthPnl / startingBalance) * 100 : 0;
+    const yearRoi = startingBalance ? (yearPnl / startingBalance) * 100 : 0;
+
     return {
       closed,
       closedCount: closed.length,
@@ -210,6 +255,13 @@ export default function TradingJournal() {
       curve,
       currentBalance,
       pctChange,
+      pnlByDate,
+      timeframes: {
+        dayPnl, dayRoi,
+        weekPnl, weekRoi,
+        monthPnl, monthRoi,
+        yearPnl, yearRoi
+      }
     };
   }, [trades, startingBalance]);
 
@@ -218,40 +270,88 @@ export default function TradingJournal() {
       return {
         type: "info",
         title: "Assistant IA Trading",
-        msg: "Enregistre tes premiers trades clôturés pour recevoir une analyse automatique de ton exécution et de tes statistiques.",
+        msg: "Enregistre tes premiers trades clôturés pour recevoir une analyse automatique de ton exécution et de ta rentabilité.",
       };
     }
+
+    const roi = stats.pctChange;
+    const roiStr = `${roi >= 0 ? '+' : ''}${roi.toFixed(2)}%`;
 
     if (stats.winRate !== null && stats.winRate < 40 && (stats.profitFactor === null || stats.profitFactor < 1)) {
       return {
         type: "warning",
-        title: "Attention au Risk Management",
-        msg: `Ton Win Rate est à ${stats.winRate.toFixed(1)}% et ton Profit Factor est faible (${stats.profitFactor ? stats.profitFactor.toFixed(2) : '—'}). Attention au sur-trading ou aux sorties prématurées sur tes gagnants.`,
+        title: `Rentabilité Globale : ${roiStr} (Attention au Risk Management)`,
+        msg: `Ton taux de rentabilité global est à ${roiStr} avec un Win Rate de ${stats.winRate.toFixed(1)}%. Ton Profit Factor est à ${stats.profitFactor ? stats.profitFactor.toFixed(2) : '—'}. Attention aux sorties prématurées ou au sur-trading.`,
       };
     }
 
     if (stats.avgWin && stats.avgLoss && Math.abs(stats.avgLoss) > stats.avgWin * 1.5) {
       return {
         type: "danger",
-        title: "Ratios R:R asymétriques",
-        msg: `Tes pertes moyennes (${fmtMoney(stats.avgLoss)}) dépassent largement tes gains moyens (${fmtMoney(stats.avgWin)}). Assure-toi de respecter scrupuleusement tes Stop Loss !`,
+        title: `Rentabilité Globale : ${roiStr} (Ratios R:R Asymétriques)`,
+        msg: `Tes pertes moyennes (${fmtMoney(stats.avgLoss)}) dépassent tes gains moyens (${fmtMoney(stats.avgWin)}). Veille à maintenir un Risk:Reward positif pour protéger ton capital.`,
       };
     }
 
     if (stats.winRate && stats.winRate >= 50 && stats.totalPnl > 0) {
       return {
         type: "success",
-        title: "Excellente discipline",
-        msg: `Belle régularité avec ${stats.winRate.toFixed(1)}% de réussite et un P&L positif de ${fmtMoney(stats.totalPnl)}. Maintiens tes setups de haute qualité !`,
+        title: `Rentabilité Globale : ${roiStr} (Excellente Discipline)`,
+        msg: `Tu es actuellement rentable à ${roiStr} sur ton compte global avec un Win Rate de ${stats.winRate.toFixed(1)}% et ${fmtMoney(stats.totalPnl)} de profit. Continue d'appliquer ton plan avec rigueur.`,
       };
     }
 
     return {
       type: "info",
-      title: "Analyse des statistiques",
-      msg: `Tu as ${stats.closedCount} trade(s) clôturé(s). Taux de réussite actuel : ${stats.winRate ? stats.winRate.toFixed(1) : '0'}%. Poursuis le journal de bord rigoureux.`,
+      title: `Rentabilité Globale : ${roiStr}`,
+      msg: `Rentabilité actuelle du compte : ${roiStr}. Taux de réussite : ${stats.winRate ? stats.winRate.toFixed(1) : '0'}% sur ${stats.closedCount} trade(s) clôturé(s).`,
     };
   }, [stats]);
+
+  const lastTradeAiAnalysis = useMemo(() => {
+    const closed = trades
+      .map((t) => ({ ...t, pnl: computePnl(t) }))
+      .filter((t) => t.pnl !== null);
+
+    if (closed.length === 0) return null;
+
+    const last = closed[closed.length - 1];
+    const tradeRoi = startingBalance ? (last.pnl / startingBalance) * 100 : 0;
+    const rr = computeRR(last);
+
+    let status = "WIN";
+    let statusColor = COLORS.gain;
+    let explanation = "";
+
+    if (last.pnl > 0) {
+      status = "GAGNANT";
+      statusColor = COLORS.gain;
+      if (rr && parseFloat(rr) >= 2) {
+        explanation = `Ce trade a parfaitement respecté le plan avec un Risk:Reward avantageux de 1:${rr}. L'exécution a généré un gain net de ${fmtMoney(last.pnl)}.`;
+      } else {
+        explanation = `Trade clôturé en profit (+${fmtMoney(last.pnl)}). Assure-toi d'optimiser davantage ton Risk:Reward pour maximiser tes gains sur les mouvements suivis.`;
+      }
+    } else if (last.pnl < 0) {
+      status = "PERDANT";
+      statusColor = COLORS.loss;
+      explanation = `Trade clôturé en perte (-${fmtMoney(Math.abs(last.pnl))}). L'invalidation du plan a été respectée par le Stop Loss. Vérifie si le setup (ex: ${last.strategy || 'Stratégie'}) a été déclenché dans les bonnes conditions de marché.`;
+    } else {
+      status = "NEUTRE";
+      statusColor = COLORS.textMuted;
+      explanation = "Trade clôturé à Break-Even (0 €). Capital préservé.";
+    }
+
+    return {
+      symbol: last.symbol,
+      direction: last.direction,
+      pnl: last.pnl,
+      roi: tradeRoi,
+      status,
+      statusColor,
+      explanation,
+      date: last.exitDate || last.entryDate
+    };
+  }, [trades, startingBalance]);
 
   const sortedTrades = useMemo(
     () =>
@@ -273,7 +373,7 @@ export default function TradingJournal() {
       direction: t.direction,
       entryDate: t.entryDate || todayISO(),
       entryPrice: t.entryPrice !== undefined && t.entryPrice !== null ? String(t.entryPrice) : "",
-      exitDate: t.exitDate || "",
+      exitDate: t.exitDate || todayISO(),
       exitPrice: t.exitPrice !== undefined && t.exitPrice !== null ? String(t.exitPrice) : "",
       manualPnl: t.manualPnl !== undefined && t.manualPnl !== null ? String(t.manualPnl) : "",
       stopLoss: t.stopLoss !== undefined && t.stopLoss !== null ? String(t.stopLoss) : "",
@@ -307,6 +407,7 @@ export default function TradingJournal() {
       ...form,
       symbol: symbolClean,
       entryDate: entryDateClean,
+      exitDate: form.exitDate || entryDateClean,
       entryPrice: parseNum(form.entryPrice),
       exitPrice: form.exitPrice === "" ? "" : parseNum(form.exitPrice),
       manualPnl: form.manualPnl === "" ? "" : parseNum(form.manualPnl),
@@ -359,13 +460,13 @@ export default function TradingJournal() {
       `}</style>
 
       <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-        {/* Navigation Bar */}
+        {/* Top Bar */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, paddingBottom: 16, borderBottom: `1px solid ${COLORS.border}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ background: COLORS.accent, color: "#fff", width: 32, height: 32, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 14 }}>TV</div>
             <div>
               <h1 style={{ fontWeight: 600, fontSize: 18, margin: 0, color: "#F0F3FA" }}>Trading Journal AI</h1>
-              <span style={{ color: COLORS.textMuted, fontSize: 12 }}>TradingView Terminal Style</span>
+              <span style={{ color: COLORS.textMuted, fontSize: 12 }}>TradingView Terminal & Performance Calendar</span>
             </div>
           </div>
           <button onClick={openAddModal} style={{ display: "flex", alignItems: "center", gap: 6, background: COLORS.accent, color: "#FFF", border: "none", borderRadius: 6, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
@@ -387,7 +488,32 @@ export default function TradingJournal() {
           </div>
         </div>
 
-        {/* Top Section / Equity Curve */}
+        {/* Analyse IA du Dernier Trade Enregistré */}
+        {lastTradeAiAnalysis && (
+          <div className="tv-card" style={{ padding: "14px 18px", marginBottom: 20, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}` }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.accent, display: "flex", alignItems: "center", gap: 6 }}>
+                <Sparkles size={14} /> ANALYSE IA DU DERNIER TRADE SÉLECTIONNÉ ({lastTradeAiAnalysis.symbol} - {fmtDate(lastTradeAiAnalysis.date)})
+              </div>
+              <div style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: lastTradeAiAnalysis.statusColor, color: "#FFF", fontWeight: 700 }}>
+                {lastTradeAiAnalysis.status}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+              <div style={{ fontSize: 13, color: "#F0F3FA", flex: 1 }}>
+                {lastTradeAiAnalysis.explanation}
+              </div>
+              <div style={{ fontFamily: FONT_MONO, fontSize: 13, textAlign: "right" }}>
+                <span style={{ color: COLORS.textMuted, fontSize: 11 }}>Impact Capital : </span>
+                <span style={{ fontWeight: 700, color: lastTradeAiAnalysis.pnl >= 0 ? COLORS.gain : COLORS.loss }}>
+                  {fmtMoney(lastTradeAiAnalysis.pnl)} ({fmtPct(lastTradeAiAnalysis.roi)})
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Equity & Balance */}
         <div className="tv-card" style={{ padding: "20px 24px", marginBottom: 20, display: "flex", gap: 28, flexWrap: "wrap", alignItems: "center" }}>
           <div style={{ minWidth: 220 }}>
             <div style={{ color: COLORS.textMuted, fontSize: 12, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
@@ -444,7 +570,7 @@ export default function TradingJournal() {
         </div>
 
         {/* Table Trades */}
-        <div className="tv-card" style={{ overflow: "hidden" }}>
+        <div className="tv-card" style={{ overflow: "hidden", marginBottom: 30 }}>
           <div style={{ padding: "14px 18px", borderBottom: `1px solid ${COLORS.border}`, fontSize: 13, fontWeight: 600, color: "#F0F3FA", display: "flex", justifyContent: "space-between" }}>
             <span>Positions & Historique</span>
             <span style={{ fontSize: 12, color: COLORS.textMuted, fontWeight: 400 }}>{sortedTrades.length} ordre(s)</span>
@@ -530,6 +656,54 @@ export default function TradingJournal() {
             </div>
           )}
         </div>
+
+        {/* CALENDRIER ANNUEL & RENTABILITÉ DÉTAILLÉE */}
+        <div className="tv-card" style={{ padding: "20px 24px", marginTop: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Calendar size={20} style={{ color: COLORS.accent }} />
+              <h2 style={{ fontSize: 16, fontWeight: 600, color: "#F0F3FA", margin: 0 }}>Calendrier Annuel de Performance</h2>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <button onClick={() => setSelectedCalendarYear(y => y - 1)} style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, color: COLORS.text, borderRadius: 4, padding: "4px 8px", cursor: "pointer" }}>
+                <ChevronLeft size={14} />
+              </button>
+              <span style={{ fontFamily: FONT_MONO, fontWeight: 700, fontSize: 15, color: "#F0F3FA" }}>{selectedCalendarYear}</span>
+              <button onClick={() => setSelectedCalendarYear(y => y + 1)} style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, color: COLORS.text, borderRadius: 4, padding: "4px 8px", cursor: "pointer" }}>
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          </div>
+
+          {/* RENTABILITÉ PAR TIMEFRAME */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 24 }}>
+            <TimeframeCard title="AUJOURD'HUI" pnl={stats.timeframes.dayPnl} roi={stats.timeframes.dayRoi} />
+            <TimeframeCard title="CETTE SEMAINE" pnl={stats.timeframes.weekPnl} roi={stats.timeframes.weekRoi} />
+            <TimeframeCard title="CE MOIS-CI" pnl={stats.timeframes.monthPnl} roi={stats.timeframes.monthRoi} />
+            <TimeframeCard title="CETTE ANNÉE" pnl={stats.timeframes.yearPnl} roi={stats.timeframes.yearRoi} />
+          </div>
+
+          {/* Légende du Calendrier */}
+          <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 16, fontSize: 12, color: COLORS.textMuted }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div style={{ width: 12, height: 12, borderRadius: 3, background: COLORS.gain }} /> Gain
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div style={{ width: 12, height: 12, borderRadius: 3, background: COLORS.loss }} /> Perte
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div style={{ width: 12, height: 12, borderRadius: 3, border: `2px solid ${COLORS.accent}`, background: COLORS.surfaceAlt }} /> Aujourd'hui
+            </div>
+          </div>
+
+          {/* Grille des 12 Mois */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 16 }}>
+            {Array.from({ length: 12 }).map((_, monthIdx) => (
+              <YearMonthView key={monthIdx} year={selectedCalendarYear} month={monthIdx} pnlByDate={stats.pnlByDate} />
+            ))}
+          </div>
+        </div>
+
       </div>
 
       {/* Modal Form */}
@@ -551,7 +725,7 @@ export default function TradingJournal() {
               {/* Champ P&L Direct / Manuel */}
               <div style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.accentSoft}`, borderRadius: 4, padding: 8, display: "flex", flexDirection: "column", gap: 4 }}>
                 <label style={{ fontSize: 11, color: COLORS.accent, fontWeight: 600 }}>
-                  Gains / Pertes directs (€) - Facultatif si prix sortie est entré
+                  Gains / Pertes directs (€) - Saisissez la perte en négatif (ex: -50)
                 </label>
                 <input 
                   type="text" 
@@ -563,19 +737,27 @@ export default function TradingJournal() {
               </div>
 
               <div style={{ display: "flex", gap: 8 }}>
-                <input type="date" value={form.entryDate} onChange={(e) => setForm({ ...form, entryDate: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 10, color: COLORS.textMuted }}>Date Entrée</label>
+                  <input type="date" value={form.entryDate} onChange={(e) => setForm({ ...form, entryDate: e.target.value })} style={{ width: "100%", background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 12 }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 10, color: COLORS.textMuted }}>Date Sortie / Clôture</label>
+                  <input type="date" value={form.exitDate} onChange={(e) => setForm({ ...form, exitDate: e.target.value })} style={{ width: "100%", background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 12 }} />
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 8 }}>
                 <input type="text" placeholder="Taille / Lots (ex: 1)" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
-              </div>
-
-              <div style={{ display: "flex", gap: 8 }}>
                 <input type="text" placeholder="Prix d'entrée" value={form.entryPrice} onChange={(e) => setForm({ ...form, entryPrice: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
-                <input type="text" placeholder="Prix de sortie (si fermé)" value={form.exitPrice} onChange={(e) => setForm({ ...form, exitPrice: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
               </div>
 
               <div style={{ display: "flex", gap: 8 }}>
-                <input type="text" placeholder="Stop Loss (Perte Max)" value={form.stopLoss} onChange={(e) => setForm({ ...form, stopLoss: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.lossSoft}`, borderRadius: 4, padding: 8, color: COLORS.loss, fontSize: 13 }} />
-                <input type="text" placeholder="Take Profit (Gain Cible)" value={form.takeProfit} onChange={(e) => setForm({ ...form, takeProfit: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.gainSoft}`, borderRadius: 4, padding: 8, color: COLORS.gain, fontSize: 13 }} />
+                <input type="text" placeholder="Prix de sortie (si fermé)" value={form.exitPrice} onChange={(e) => setForm({ ...form, exitPrice: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
+                <input type="text" placeholder="Stop Loss" value={form.stopLoss} onChange={(e) => setForm({ ...form, stopLoss: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.lossSoft}`, borderRadius: 4, padding: 8, color: COLORS.loss, fontSize: 13 }} />
               </div>
+
+              <input type="text" placeholder="Take Profit" value={form.takeProfit} onChange={(e) => setForm({ ...form, takeProfit: e.target.value })} style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.gainSoft}`, borderRadius: 4, padding: 8, color: COLORS.gain, fontSize: 13 }} />
 
               <input placeholder="Setup / Stratégie (ex: FVG, ICT, Breaker)" value={form.strategy} onChange={(e) => setForm({ ...form, strategy: e.target.value })} style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
 
@@ -612,7 +794,7 @@ export default function TradingJournal() {
                 )}
               </div>
 
-              <button type="button" onClick={submitForm} style={{ marginTop: 6, background: COLORS.accent, color: "#FFF", border: "none", borderRadius: 4, padding: 10, fontWeight: 600, cursor: "pointer", fontSize: 13 }}>Enregistrer l'ordre</button>
+              <button type="button" onClick={submitForm} style={{ marginTop: 6, background: COLORS.accent, color: "#FFF", border: "none", borderRadius: 4, padding: 10, fontWeight: 600, cursor: "pointer", fontSize: 13 }}>Enregistrer le trade</button>
             </div>
           </div>
         </div>
@@ -649,6 +831,110 @@ function StatCard({ icon, label, value, tone }) {
         {icon} {label}
       </div>
       <div style={{ fontFamily: FONT_MONO, fontSize: 16, fontWeight: 600, color }}>{value}</div>
+    </div>
+  );
+}
+
+function TimeframeCard({ title, pnl, roi }) {
+  const isPositive = pnl >= 0;
+  const color = pnl === 0 ? COLORS.textMuted : isPositive ? COLORS.gain : COLORS.loss;
+
+  return (
+    <div style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 6, padding: "10px 14px" }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.textMuted, letterSpacing: "0.05em", marginBottom: 4 }}>
+        {title}
+      </div>
+      <div style={{ fontFamily: FONT_MONO, fontSize: 15, fontWeight: 700, color }}>
+        {fmtMoney(pnl)}
+      </div>
+      <div style={{ fontFamily: FONT_MONO, fontSize: 11, color, marginTop: 2 }}>
+        {fmtPct(roi)}
+      </div>
+    </div>
+  );
+}
+
+function YearMonthView({ year, month, pnlByDate }) {
+  const todayStr = todayISO();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDayIndex = new Date(year, month, 1).getDay(); // 0 = Sun
+  const adjustedFirstDay = firstDayIndex === 0 ? 6 : firstDayIndex - 1; // 0 = Mon
+
+  const days = [];
+  for (let i = 0; i < adjustedFirstDay; i++) {
+    days.push(null);
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    days.push(d);
+  }
+
+  return (
+    <div style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 6, padding: 12 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: "#F0F3FA", marginBottom: 10, textAlign: "center" }}>
+        {MONTH_NAMES[month]}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, textAlign: "center", fontSize: 10, color: COLORS.textMuted, marginBottom: 6 }}>
+        <span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
+        {days.map((day, idx) => {
+          if (!day) return <div key={idx} style={{ height: 26 }} />;
+
+          const monthStr = String(month + 1).padStart(2, "0");
+          const dayStr = String(day).padStart(2, "0");
+          const dateISO = `${year}-${monthStr}-${dayStr}`;
+
+          const isToday = dateISO === todayStr;
+          const hasPnl = pnlByDate[dateISO] !== undefined;
+          const dayPnl = pnlByDate[dateISO] || 0;
+
+          let bg = "transparent";
+          let textColor = COLORS.text;
+          let border = "1px solid transparent";
+
+          if (hasPnl) {
+            if (dayPnl > 0) {
+              bg = COLORS.gain;
+              textColor = "#FFF";
+            } else if (dayPnl < 0) {
+              bg = COLORS.loss;
+              textColor = "#FFF";
+            }
+          }
+
+          if (isToday) {
+            border = `2px solid ${COLORS.accent}`;
+          }
+
+          return (
+            <div
+              key={idx}
+              title={hasPnl ? `${dateISO} : ${fmtMoney(dayPnl)}` : isToday ? "Aujourd'hui" : dateISO}
+              style={{
+                height: 26,
+                display: "flex",
+                alignItems: "center",
+                justify: "center",
+                borderRadius: 4,
+                background: bg,
+                color: textColor,
+                fontSize: 11,
+                fontFamily: FONT_MONO,
+                fontWeight: isToday || hasPnl ? 700 : 400,
+                border,
+                position: "relative"
+              }}
+            >
+              {day}
+              {isToday && (
+                <div style={{ position: "absolute", top: 2, right: 2, width: 4, height: 4, borderRadius: "50%", background: COLORS.accent }} />
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
