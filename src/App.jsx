@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import {
   Plus, X, Trash2, Pencil, TrendingUp, TrendingDown,
   Wallet, Target, Percent, ArrowUpRight, ArrowDownRight, ChevronRight, Image as ImageIcon,
-  Bot, Sparkles, CheckCircle2, AlertTriangle, ExternalLink, Link as LinkIcon, ShieldAlert
+  Bot, Sparkles, ExternalLink, Link as LinkIcon, MessageSquare
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer
@@ -22,7 +22,6 @@ if (typeof window !== "undefined" && !window.storage) {
   };
 }
 
-// Couleurs Style TradingView Dark Theme
 const COLORS = {
   bg: "#131722",
   surface: "#1E222D",
@@ -77,16 +76,24 @@ function fmtDate(d) {
 }
 
 function computePnl(t) {
+  // 1. Si un montant de P&L manuel est saisi
+  if (t.manualPnl !== "" && t.manualPnl !== null && t.manualPnl !== undefined) {
+    const val = parseNum(t.manualPnl);
+    const fees = parseNum(t.fees) || 0;
+    return val - fees;
+  }
+
+  // 2. Sinon, calcul automatique via le Prix de Sortie
   if (t.exitPrice === "" || t.exitPrice === null || t.exitPrice === undefined) return null;
   const entry = parseNum(t.entryPrice);
   const exit = parseNum(t.exitPrice);
-  const qty = parseNum(t.quantity);
+  const qty = parseNum(t.quantity) || 1;
   const fees = parseNum(t.fees) || 0;
   
   if (!exit && exit !== 0) return null;
 
   const dir = t.direction === "short" ? -1 : 1;
-  const raw = (exit - entry) * (qty || 1) * dir;
+  const raw = (exit - entry) * qty * dir;
   return raw - fees;
 }
 
@@ -109,9 +116,10 @@ const emptyForm = {
   entryPrice: "",
   exitDate: "",
   exitPrice: "",
+  manualPnl: "",
   stopLoss: "",
   takeProfit: "",
-  quantity: "",
+  quantity: "1",
   fees: "",
   strategy: "",
   notes: "",
@@ -209,7 +217,7 @@ export default function TradingJournal() {
     if (stats.closedCount === 0) {
       return {
         type: "info",
-        title: "Assistant IA TradingView",
+        title: "Assistant IA Trading",
         msg: "Enregistre tes premiers trades clôturés pour recevoir une analyse automatique de ton exécution et de tes statistiques.",
       };
     }
@@ -267,9 +275,10 @@ export default function TradingJournal() {
       entryPrice: t.entryPrice !== undefined && t.entryPrice !== null ? String(t.entryPrice) : "",
       exitDate: t.exitDate || "",
       exitPrice: t.exitPrice !== undefined && t.exitPrice !== null ? String(t.exitPrice) : "",
+      manualPnl: t.manualPnl !== undefined && t.manualPnl !== null ? String(t.manualPnl) : "",
       stopLoss: t.stopLoss !== undefined && t.stopLoss !== null ? String(t.stopLoss) : "",
       takeProfit: t.takeProfit !== undefined && t.takeProfit !== null ? String(t.takeProfit) : "",
-      quantity: t.quantity !== undefined && t.quantity !== null ? String(t.quantity) : "",
+      quantity: t.quantity !== undefined && t.quantity !== null ? String(t.quantity) : "1",
       fees: t.fees !== undefined && t.fees !== null ? String(t.fees) : "",
       strategy: t.strategy || "",
       notes: t.notes || "",
@@ -300,10 +309,12 @@ export default function TradingJournal() {
       entryDate: entryDateClean,
       entryPrice: parseNum(form.entryPrice),
       exitPrice: form.exitPrice === "" ? "" : parseNum(form.exitPrice),
+      manualPnl: form.manualPnl === "" ? "" : parseNum(form.manualPnl),
       stopLoss: form.stopLoss === "" ? "" : parseNum(form.stopLoss),
       takeProfit: form.takeProfit === "" ? "" : parseNum(form.takeProfit),
       quantity: parseNum(form.quantity) || 1,
       fees: parseNum(form.fees) || 0,
+      notes: form.notes || "",
     };
 
     if (editingId) {
@@ -348,7 +359,7 @@ export default function TradingJournal() {
       `}</style>
 
       <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-        {/* Navigation Bar TradingView Style */}
+        {/* Navigation Bar */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, paddingBottom: 16, borderBottom: `1px solid ${COLORS.border}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ background: COLORS.accent, color: "#fff", width: 32, height: 32, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 14 }}>TV</div>
@@ -422,7 +433,7 @@ export default function TradingJournal() {
           </div>
         </div>
 
-        {/* Stats Grid TradingView Style */}
+        {/* Stats Grid */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 20 }}>
           <StatCard icon={<Target size={14} />} label="Taux de réussite" value={stats.winRate === null ? "—" : `${stats.winRate.toFixed(1)} %`} />
           <StatCard icon={<Percent size={14} />} label="Profit Factor" value={stats.profitFactor === null ? "—" : stats.profitFactor === Infinity ? "∞" : stats.profitFactor.toFixed(2)} />
@@ -432,7 +443,7 @@ export default function TradingJournal() {
           <StatCard icon={<ChevronRight size={14} />} label="En Cours" value={stats.openCount} />
         </div>
 
-        {/* Table TradingView */}
+        {/* Table Trades */}
         <div className="tv-card" style={{ overflow: "hidden" }}>
           <div style={{ padding: "14px 18px", borderBottom: `1px solid ${COLORS.border}`, fontSize: 13, fontWeight: 600, color: "#F0F3FA", display: "flex", justifyContent: "space-between" }}>
             <span>Positions & Historique</span>
@@ -446,7 +457,7 @@ export default function TradingJournal() {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
                 <thead>
                   <tr style={{ textAlign: "left", color: COLORS.textMuted, fontSize: 11, borderBottom: `1px solid ${COLORS.border}` }}>
-                    {["Date", "Paire", "Sens", "Prix Entrée", "Stop Loss (Pertes)", "Take Profit (Gains)", "Prix Sortie", "R:R", "Profit / Perte (€)", "Stratégie", "Graphique", ""].map((h) => (
+                    {["Date", "Paire", "Sens", "Prix Entrée", "Stop Loss", "Take Profit", "Prix Sortie", "R:R", "Profit / Perte (€)", "Stratégie", "Observations", "Graphique", ""].map((h) => (
                       <th key={h} style={{ padding: "10px 14px", fontWeight: 500 }}>{h}</th>
                     ))}
                   </tr>
@@ -467,15 +478,26 @@ export default function TradingJournal() {
                             {t.direction === "long" ? "BUY" : "SELL"}
                           </span>
                         </td>
-                        <td style={{ padding: "10px 14px", fontFamily: FONT_MONO }}>{parseNum(t.entryPrice).toLocaleString("fr-FR")}</td>
+                        <td style={{ padding: "10px 14px", fontFamily: FONT_MONO }}>{t.entryPrice ? parseNum(t.entryPrice).toLocaleString("fr-FR") : "—"}</td>
                         <td style={{ padding: "10px 14px", fontFamily: FONT_MONO, color: COLORS.loss }}>{t.stopLoss ? parseNum(t.stopLoss).toLocaleString("fr-FR") : "—"}</td>
                         <td style={{ padding: "10px 14px", fontFamily: FONT_MONO, color: COLORS.gain }}>{t.takeProfit ? parseNum(t.takeProfit).toLocaleString("fr-FR") : "—"}</td>
-                        <td style={{ padding: "10px 14px", fontFamily: FONT_MONO }}>{isOpen ? <span style={{ color: COLORS.accent, fontSize: 11.5 }}>EN COURS</span> : parseNum(t.exitPrice).toLocaleString("fr-FR")}</td>
+                        <td style={{ padding: "10px 14px", fontFamily: FONT_MONO }}>{isOpen ? <span style={{ color: COLORS.accent, fontSize: 11.5 }}>EN COURS</span> : t.exitPrice ? parseNum(t.exitPrice).toLocaleString("fr-FR") : "—"}</td>
                         <td style={{ padding: "10px 14px", fontFamily: FONT_MONO, color: COLORS.textMuted }}>{rr ? `1:${rr}` : "—"}</td>
                         <td style={{ padding: "10px 14px", fontFamily: FONT_MONO, fontWeight: 600, color: isOpen ? COLORS.textMuted : pnl >= 0 ? COLORS.gain : COLORS.loss }}>
                           {isOpen ? "—" : fmtMoney(pnl)}
                         </td>
                         <td style={{ padding: "10px 14px", color: COLORS.textMuted }}>{t.strategy || "—"}</td>
+                        <td style={{ padding: "10px 14px", color: COLORS.textMuted, maxWidth: 180, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={t.notes}>
+                          {t.notes ? (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: COLORS.text }}>
+                              <MessageSquare size={12} style={{ color: COLORS.accent, flexShrink: 0 }} />
+                              {t.notes}
+                            </span>
+                          ) : (
+                            <span style={{ color: COLORS.textFaint }}>—</span>
+                          )}
+                        </td>
+
                         <td style={{ padding: "10px 14px" }}>
                           {t.screenshot ? (
                             <div style={{ display: "flex", gap: 6 }}>
@@ -513,7 +535,7 @@ export default function TradingJournal() {
       {/* Modal Form */}
       {modalOpen && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0, 0, 0, 0.7)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16 }}>
-          <div className="tv-card" style={{ width: "100%", maxWidth: 480, padding: 20, boxShadow: "0 10px 30px rgba(0,0,0,0.5)" }}>
+          <div className="tv-card" style={{ width: "100%", maxWidth: 480, padding: 20, boxShadow: "0 10px 30px rgba(0,0,0,0.5)", maxHeight: "90vh", overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16, alignItems: "center" }}>
               <div style={{ fontWeight: 600, fontSize: 15, color: "#F0F3FA" }}>{editingId ? "Modifier la Position" : "Nouvelle Position"}</div>
               <button onClick={() => setModalOpen(false)} style={{ background: "none", border: "none", color: COLORS.textMuted, cursor: "pointer" }}><X size={16} /></button>
@@ -526,9 +548,23 @@ export default function TradingJournal() {
                 <button type="button" onClick={() => setForm({ ...form, direction: "short" })} style={{ flex: 1, padding: 8, background: form.direction === "short" ? COLORS.lossSoft : "transparent", color: form.direction === "short" ? COLORS.loss : COLORS.textMuted, border: `1px solid ${form.direction === "short" ? COLORS.loss : COLORS.border}`, borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 12 }}>VENTE (SELL)</button>
               </div>
 
+              {/* Champ P&L Direct / Manuel */}
+              <div style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.accentSoft}`, borderRadius: 4, padding: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+                <label style={{ fontSize: 11, color: COLORS.accent, fontWeight: 600 }}>
+                  Gains / Pertes directs (€) - Facultatif si prix sortie est entré
+                </label>
+                <input 
+                  type="text" 
+                  placeholder="ex: +150 ou -50" 
+                  value={form.manualPnl} 
+                  onChange={(e) => setForm({ ...form, manualPnl: e.target.value })} 
+                  style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13, fontFamily: FONT_MONO }} 
+                />
+              </div>
+
               <div style={{ display: "flex", gap: 8 }}>
                 <input type="date" value={form.entryDate} onChange={(e) => setForm({ ...form, entryDate: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
-                <input type="text" placeholder="Taille / Lots (ex: 0.10)" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
+                <input type="text" placeholder="Taille / Lots (ex: 1)" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
               </div>
 
               <div style={{ display: "flex", gap: 8 }}>
@@ -536,7 +572,6 @@ export default function TradingJournal() {
                 <input type="text" placeholder="Prix de sortie (si fermé)" value={form.exitPrice} onChange={(e) => setForm({ ...form, exitPrice: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
               </div>
 
-              {/* Nouveaux Champs Profit / Perte (Stop Loss & Take Profit) */}
               <div style={{ display: "flex", gap: 8 }}>
                 <input type="text" placeholder="Stop Loss (Perte Max)" value={form.stopLoss} onChange={(e) => setForm({ ...form, stopLoss: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.lossSoft}`, borderRadius: 4, padding: 8, color: COLORS.loss, fontSize: 13 }} />
                 <input type="text" placeholder="Take Profit (Gain Cible)" value={form.takeProfit} onChange={(e) => setForm({ ...form, takeProfit: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.gainSoft}`, borderRadius: 4, padding: 8, color: COLORS.gain, fontSize: 13 }} />
@@ -544,10 +579,22 @@ export default function TradingJournal() {
 
               <input placeholder="Setup / Stratégie (ex: FVG, ICT, Breaker)" value={form.strategy} onChange={(e) => setForm({ ...form, strategy: e.target.value })} style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
 
-              {/* Champ d'URL de screenshot ou fichier */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <label style={{ fontSize: 11.5, color: COLORS.textMuted, display: "flex", alignItems: "center", gap: 4 }}>
+                  <MessageSquare size={12} /> Observations & Commentaires
+                </label>
+                <textarea 
+                  rows={3}
+                  placeholder="Note tes remarques (ex: FVG non respecté, session London, psychologie...)" 
+                  value={form.notes} 
+                  onChange={(e) => setForm({ ...form, notes: e.target.value })} 
+                  style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 12.5, resize: "vertical" }} 
+                />
+              </div>
+
               <div style={{ background: COLORS.surfaceAlt, border: `1px dashed ${COLORS.border}`, borderRadius: 4, padding: 10, display: "flex", flexDirection: "column", gap: 8 }}>
                 <div style={{ fontSize: 11.5, color: COLORS.textMuted, display: "flex", alignItems: "center", gap: 4 }}>
-                  <LinkIcon size={12} /> Lien URL du graphique (TradingView / TradeZou)
+                  <LinkIcon size={12} /> Lien URL du graphique
                 </div>
                 <input 
                   type="text" 
