@@ -46,6 +46,13 @@ const FONT_MONO = "'JetBrains Mono', 'Courier New', monospace";
 const uid = () => Math.random().toString(36).slice(2, 10);
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
+function parseNum(val) {
+  if (val === "" || val === null || val === undefined) return "";
+  const cleaned = String(val).replace(",", ".");
+  const n = parseFloat(cleaned);
+  return Number.isNaN(n) ? 0 : n;
+}
+
 function fmtMoney(n, opts = {}) {
   if (n === null || n === undefined || Number.isNaN(n)) return "—";
   const sign = n > 0 ? "+" : n < 0 ? "−" : "";
@@ -56,11 +63,13 @@ function fmtMoney(n, opts = {}) {
     ...opts,
   })} €`;
 }
+
 function fmtPct(n) {
   if (n === null || n === undefined || Number.isNaN(n)) return "—";
   const sign = n > 0 ? "+" : n < 0 ? "−" : "";
   return `${sign}${Math.abs(n).toFixed(1)} %`;
 }
+
 function fmtDate(d) {
   if (!d) return "—";
   const dt = new Date(d + "T00:00:00");
@@ -69,9 +78,16 @@ function fmtDate(d) {
 
 function computePnl(t) {
   if (t.exitPrice === "" || t.exitPrice === null || t.exitPrice === undefined) return null;
+  const entry = parseNum(t.entryPrice);
+  const exit = parseNum(t.exitPrice);
+  const qty = parseNum(t.quantity);
+  const fees = parseNum(t.fees) || 0;
+  
+  if (!entry || !exit || !qty) return null;
+
   const dir = t.direction === "short" ? -1 : 1;
-  const raw = (Number(t.exitPrice) - Number(t.entryPrice)) * Number(t.quantity) * dir;
-  return raw - Number(t.fees || 0);
+  const raw = (exit - entry) * qty * dir;
+  return raw - fees;
 }
 
 const emptyForm = {
@@ -228,16 +244,17 @@ export default function TradingJournal() {
     setEditingId(null);
     setModalOpen(true);
   }
+
   function openEditModal(t) {
     setForm({
       symbol: t.symbol,
       direction: t.direction,
-      entryDate: t.entryDate,
-      entryPrice: t.entryPrice,
+      entryDate: t.entryDate || todayISO(),
+      entryPrice: t.entryPrice !== undefined && t.entryPrice !== null ? String(t.entryPrice) : "",
       exitDate: t.exitDate || "",
-      exitPrice: t.exitPrice === undefined || t.exitPrice === null ? "" : t.exitPrice,
-      quantity: t.quantity,
-      fees: t.fees || "",
+      exitPrice: t.exitPrice !== undefined && t.exitPrice !== null ? String(t.exitPrice) : "",
+      quantity: t.quantity !== undefined && t.quantity !== null ? String(t.quantity) : "",
+      fees: t.fees !== undefined && t.fees !== null ? String(t.fees) : "",
       strategy: t.strategy || "",
       notes: t.notes || "",
       screenshot: t.screenshot || "",
@@ -257,21 +274,29 @@ export default function TradingJournal() {
     }
   }
 
+  // --- SOUISSION CORRIGÉE & SÉCURISÉE ---
   function submitForm() {
-    if (!form.symbol.trim() || !form.entryDate || form.entryPrice === "" || form.quantity === "") return;
+    const symbolClean = form.symbol ? form.symbol.trim().toUpperCase() : "TRADE";
+    const entryDateClean = form.entryDate || todayISO();
+
     const payload = {
       ...form,
-      symbol: form.symbol.trim().toUpperCase(),
-      entryPrice: Number(form.entryPrice),
-      exitPrice: form.exitPrice === "" ? "" : Number(form.exitPrice),
-      quantity: Number(form.quantity),
-      fees: form.fees === "" ? 0 : Number(form.fees),
+      symbol: symbolClean,
+      entryDate: entryDateClean,
+      entryPrice: parseNum(form.entryPrice),
+      exitPrice: form.exitPrice === "" ? "" : parseNum(form.exitPrice),
+      quantity: parseNum(form.quantity) || 1,
+      fees: parseNum(form.fees) || 0,
     };
+
     if (editingId) {
       setTrades((prev) => prev.map((t) => (t.id === editingId ? { ...t, ...payload } : t)));
     } else {
       setTrades((prev) => [...prev, { id: uid(), ...payload }]);
     }
+
+    setForm(emptyForm);
+    setEditingId(null);
     setModalOpen(false);
   }
 
@@ -286,8 +311,8 @@ export default function TradingJournal() {
   }
 
   function saveBalance() {
-    const v = Number(balanceDraft);
-    if (!Number.isNaN(v) && v >= 0) setStartingBalance(v);
+    const v = parseNum(balanceDraft);
+    if (v >= 0) setStartingBalance(v);
     setEditingBalance(false);
   }
 
@@ -347,7 +372,7 @@ export default function TradingJournal() {
             </div>
             {editingBalance ? (
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <input autoFocus type="number" value={balanceDraft} onChange={(e) => setBalanceDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveBalance()} style={{ width: 120, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: "4px 8px", color: COLORS.text, fontFamily: FONT_MONO, fontSize: 15 }} />
+                <input autoFocus type="text" value={balanceDraft} onChange={(e) => setBalanceDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveBalance()} style={{ width: 120, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: "4px 8px", color: COLORS.text, fontFamily: FONT_MONO, fontSize: 15 }} />
                 <button onClick={saveBalance} style={{ background: COLORS.accent, color: "#fff", border: "none", borderRadius: 4, padding: "5px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>OK</button>
               </div>
             ) : (
@@ -425,8 +450,8 @@ export default function TradingJournal() {
                             {t.direction === "long" ? "BUY" : "SELL"}
                           </span>
                         </td>
-                        <td style={{ padding: "10px 14px", fontFamily: FONT_MONO }}>{Number(t.entryPrice).toLocaleString("fr-FR")}</td>
-                        <td style={{ padding: "10px 14px", fontFamily: FONT_MONO }}>{isOpen ? <span style={{ color: COLORS.accent, fontSize: 11.5 }}>EN COURS</span> : Number(t.exitPrice).toLocaleString("fr-FR")}</td>
+                        <td style={{ padding: "10px 14px", fontFamily: FONT_MONO }}>{parseNum(t.entryPrice).toLocaleString("fr-FR")}</td>
+                        <td style={{ padding: "10px 14px", fontFamily: FONT_MONO }}>{isOpen ? <span style={{ color: COLORS.accent, fontSize: 11.5 }}>EN COURS</span> : parseNum(t.exitPrice).toLocaleString("fr-FR")}</td>
                         <td style={{ padding: "10px 14px", fontFamily: FONT_MONO }}>{t.quantity}</td>
                         <td style={{ padding: "10px 14px", fontFamily: FONT_MONO, fontWeight: 600, color: isOpen ? COLORS.textMuted : pnl >= 0 ? COLORS.gain : COLORS.loss }}>
                           {isOpen ? "—" : fmtMoney(pnl)}
@@ -490,16 +515,16 @@ export default function TradingJournal() {
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <input placeholder="Symbole (ex: GOLD, EURUSD, BTCUSD)" value={form.symbol} onChange={(e) => setForm({ ...form, symbol: e.target.value })} style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => setForm({ ...form, direction: "long" })} style={{ flex: 1, padding: 8, background: form.direction === "long" ? COLORS.gainSoft : "transparent", color: form.direction === "long" ? COLORS.gain : COLORS.textMuted, border: `1px solid ${form.direction === "long" ? COLORS.gain : COLORS.border}`, borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 12 }}>ACHAT (BUY)</button>
-                <button onClick={() => setForm({ ...form, direction: "short" })} style={{ flex: 1, padding: 8, background: form.direction === "short" ? COLORS.lossSoft : "transparent", color: form.direction === "short" ? COLORS.loss : COLORS.textMuted, border: `1px solid ${form.direction === "short" ? COLORS.border : COLORS.border}`, borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 12 }}>VENTE (SELL)</button>
+                <button type="button" onClick={() => setForm({ ...form, direction: "long" })} style={{ flex: 1, padding: 8, background: form.direction === "long" ? COLORS.gainSoft : "transparent", color: form.direction === "long" ? COLORS.gain : COLORS.textMuted, border: `1px solid ${form.direction === "long" ? COLORS.gain : COLORS.border}`, borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 12 }}>ACHAT (BUY)</button>
+                <button type="button" onClick={() => setForm({ ...form, direction: "short" })} style={{ flex: 1, padding: 8, background: form.direction === "short" ? COLORS.lossSoft : "transparent", color: form.direction === "short" ? COLORS.loss : COLORS.textMuted, border: `1px solid ${form.direction === "short" ? COLORS.loss : COLORS.border}`, borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 12 }}>VENTE (SELL)</button>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <input type="date" value={form.entryDate} onChange={(e) => setForm({ ...form, entryDate: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
-                <input type="number" placeholder="Taille / Lots" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
+                <input type="text" placeholder="Taille / Lots (ex: 0.10)" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <input type="number" placeholder="Prix d'entrée" value={form.entryPrice} onChange={(e) => setForm({ ...form, entryPrice: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
-                <input type="number" placeholder="Prix de sortie (si fermé)" value={form.exitPrice} onChange={(e) => setForm({ ...form, exitPrice: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
+                <input type="text" placeholder="Prix d'entrée" value={form.entryPrice} onChange={(e) => setForm({ ...form, entryPrice: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
+                <input type="text" placeholder="Prix de sortie (si fermé)" value={form.exitPrice} onChange={(e) => setForm({ ...form, exitPrice: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
               </div>
               <input placeholder="Setup / Stratégie (ex: FVG, ICT, Breaker)" value={form.strategy} onChange={(e) => setForm({ ...form, strategy: e.target.value })} style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
 
@@ -524,7 +549,7 @@ export default function TradingJournal() {
                 )}
               </div>
 
-              <button onClick={submitForm} style={{ marginTop: 6, background: COLORS.accent, color: "#FFF", border: "none", borderRadius: 4, padding: 10, fontWeight: 600, cursor: "pointer", fontSize: 13 }}>Enregistrer l'ordre</button>
+              <button type="button" onClick={submitForm} style={{ marginTop: 6, background: COLORS.accent, color: "#FFF", border: "none", borderRadius: 4, padding: 10, fontWeight: 600, cursor: "pointer", fontSize: 13 }}>Enregistrer l'ordre</button>
             </div>
           </div>
         </div>
