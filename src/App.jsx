@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
   Plus, X, Trash2, Pencil, TrendingUp, TrendingDown,
-  Wallet, Target, Percent, ArrowUpRight, ArrowDownRight, ChevronRight, Image as ImageIcon, ExternalLink
+  Wallet, Target, Percent, ArrowUpRight, ArrowDownRight, ChevronRight, Image as ImageIcon,
+  Bot, Sparkles, CheckCircle2, AlertTriangle, ShieldAlert
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer
@@ -21,26 +22,26 @@ if (typeof window !== "undefined" && !window.storage) {
   };
 }
 
+// Couleurs Style TradingView Dark Theme
 const COLORS = {
-  bg: "#0B0E14",
-  surface: "#121721",
-  surfaceAlt: "#1A202C",
-  border: "#232B3B",
-  borderSoft: "#1B2230",
-  text: "#F1F5F9",
-  textMuted: "#94A3B8",
-  textFaint: "#64748B",
-  gold: "#F59E0B",
-  goldSoft: "rgba(245, 158, 11, 0.12)",
-  gain: "#10B981",
-  gainSoft: "rgba(16, 185, 129, 0.12)",
-  loss: "#EF4444",
-  lossSoft: "rgba(239, 68, 68, 0.12)",
+  bg: "#131722",          // Fond principal TradingView
+  surface: "#1E222D",     // Cartes & Panneaux
+  surfaceAlt: "#2A2E39",  // Éléments secondaires / Hovers
+  border: "#2A2E39",      // Bordures
+  borderSoft: "#222631",
+  text: "#D1D4DC",        // Texte principal
+  textMuted: "#787B86",   // Texte secondaire
+  textFaint: "#50535E",
+  accent: "#2962FF",      // Bleu TradingView
+  accentSoft: "rgba(41, 98, 255, 0.15)",
+  gain: "#089981",        // Vert TradingView
+  gainSoft: "rgba(8, 153, 129, 0.15)",
+  loss: "#F23645",        // Rouge TradingView
+  lossSoft: "rgba(242, 54, 69, 0.15)",
 };
 
-const FONT_DISPLAY = "'Inter', sans-serif";
-const FONT_BODY = "'Inter', sans-serif";
-const FONT_MONO = "'JetBrains Mono', monospace";
+const FONT_BODY = "-apple-system, BlinkMacSystemFont, 'Trebuchet MS', Roboto, Ubuntu, sans-serif";
+const FONT_MONO = "'JetBrains Mono', 'Courier New', monospace";
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -160,6 +161,7 @@ export default function TradingJournal() {
     const pctChange = startingBalance ? (totalPnl / startingBalance) * 100 : 0;
 
     return {
+      closed,
       closedCount: closed.length,
       openCount: open.length,
       totalPnl,
@@ -172,6 +174,47 @@ export default function TradingJournal() {
       pctChange,
     };
   }, [trades, startingBalance]);
+
+  // Analyse IA basique des performances
+  const aiFeedback = useMemo(() => {
+    if (stats.closedCount === 0) {
+      return {
+        type: "info",
+        title: "Assistant IA TradingView",
+        msg: "Enregistre tes premiers trades clôturés pour recevoir une analyse automatique de ton exécution et de tes statistiques.",
+      };
+    }
+
+    if (stats.winRate !== null && stats.winRate < 40 && (stats.profitFactor === null || stats.profitFactor < 1)) {
+      return {
+        type: "warning",
+        title: "Attention au Risk Management",
+        msg: `Ton Win Rate est à ${stats.winRate.toFixed(1)}% et ton Profit Factor est faible (${stats.profitFactor ? stats.profitFactor.toFixed(2) : '—'}). Attention au sur-trading ou aux sorties prématurées sur tes gagnants.`,
+      };
+    }
+
+    if (stats.avgWin && stats.avgLoss && Math.abs(stats.avgLoss) > stats.avgWin * 1.5) {
+      return {
+        type: "danger",
+        title: "Ratios R:R asymétriques",
+        msg: `Tes pertes moyennes (${fmtMoney(stats.avgLoss)}) dépassent largement tes gains moyens (${fmtMoney(stats.avgWin)}). Assure-toi de respecter scrupuleusement tes Stop Loss !`,
+      };
+    }
+
+    if (stats.winRate && stats.winRate >= 50 && stats.totalPnl > 0) {
+      return {
+        type: "success",
+        title: "Excellente discipline",
+        msg: `Belle régularité avec ${stats.winRate.toFixed(1)}% de réussite et un P&L positif de ${fmtMoney(stats.totalPnl)}. Maintiens tes setups de haute qualité !`,
+      };
+    }
+
+    return {
+      type: "info",
+      title: "Analyse des statistiques",
+      msg: `Tu as ${stats.closedCount} trade(s) clôturé(s). Taux de réussite actuel : ${stats.winRate ? stats.winRate.toFixed(1) : '0'}%. Poursuis le journal de bord rigoureux.`,
+    };
+  }, [stats]);
 
   const sortedTrades = useMemo(
     () =>
@@ -253,38 +296,50 @@ export default function TradingJournal() {
   const lineColor = positive ? COLORS.gain : COLORS.loss;
 
   return (
-    <div style={{ background: COLORS.bg, color: COLORS.text, fontFamily: FONT_BODY, minHeight: "100vh", padding: "28px 20px 60px" }}>
+    <div style={{ background: COLORS.bg, color: COLORS.text, fontFamily: FONT_BODY, minHeight: "100vh", padding: "20px 24px 60px" }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
         * { box-sizing: border-box; }
         input, textarea, select { font-family: ${FONT_BODY}; }
         input::placeholder, textarea::placeholder { color: ${COLORS.textFaint}; }
-        input:focus, textarea:focus, select:focus { outline: none; border-color: ${COLORS.gold} !important; }
+        input:focus, textarea:focus, select:focus { outline: none; border-color: ${COLORS.accent} !important; }
         .row-hover:hover { background: ${COLORS.surfaceAlt}; }
-        .card-glow { transition: border-color 0.2s, box-shadow 0.2s; }
-        .card-glow:hover { border-color: #2D3748; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
+        .tv-card { background: ${COLORS.surface}; border: 1px solid ${COLORS.border}; border-radius: 8px; }
       `}</style>
 
-      <div style={{ maxWidth: 1120, margin: "0 auto" }}>
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
+      <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+        {/* Navigation Bar TradingView Style */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, paddingBottom: 16, borderBottom: `1px solid ${COLORS.border}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ background: "linear-gradient(135deg, #F59E0B, #D97706)", width: 36, height: 36, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, color: "#000" }}>JT</div>
+            <div style={{ background: COLORS.accent, color: "#fff", width: 32, height: 32, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 14 }}>TV</div>
             <div>
-              <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 20, margin: 0, letterSpacing: "-0.02em" }}>Journal de Trading</h1>
-              <span style={{ color: COLORS.textFaint, fontSize: 12 }}>Suivi de performance & analyses</span>
+              <h1 style={{ fontWeight: 600, fontSize: 18, margin: 0, color: "#F0F3FA" }}>Trading Journal AI</h1>
+              <span style={{ color: COLORS.textMuted, fontSize: 12 }}>TradingView Terminal Style</span>
             </div>
           </div>
-          <button onClick={openAddModal} style={{ display: "flex", alignItems: "center", gap: 8, background: "linear-gradient(135deg, #F59E0B, #D97706)", color: "#000", border: "none", borderRadius: 8, padding: "10px 16px", fontSize: 13.5, fontWeight: 600, cursor: "pointer", boxShadow: "0 2px 10px rgba(245, 158, 11, 0.2)" }}>
-            <Plus size={16} strokeWidth={2.5} /> Nouveau trade
+          <button onClick={openAddModal} style={{ display: "flex", alignItems: "center", gap: 6, background: COLORS.accent, color: "#FFF", border: "none", borderRadius: 6, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+            <Plus size={16} /> Nouveau Trade
           </button>
         </div>
 
+        {/* Coach IA Feedback Banner */}
+        <div className="tv-card" style={{ padding: "14px 18px", marginBottom: 20, borderLeft: `4px solid ${aiFeedback.type === 'danger' ? COLORS.loss : aiFeedback.type === 'warning' ? '#F59E0B' : aiFeedback.type === 'success' ? COLORS.gain : COLORS.accent}`, display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ color: aiFeedback.type === 'danger' ? COLORS.loss : aiFeedback.type === 'warning' ? '#F59E0B' : aiFeedback.type === 'success' ? COLORS.gain : COLORS.accent }}>
+            <Bot size={22} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#F0F3FA", display: "flex", alignItems: "center", gap: 6 }}>
+              {aiFeedback.title}
+              <Sparkles size={13} style={{ color: COLORS.accent }} />
+            </div>
+            <div style={{ fontSize: 12.5, color: COLORS.textMuted, marginTop: 2 }}>{aiFeedback.msg}</div>
+          </div>
+        </div>
+
         {/* Top Section / Equity Curve */}
-        <div className="card-glow" style={{ background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 16, padding: "24px 28px", marginBottom: 20, display: "flex", gap: 32, flexWrap: "wrap", alignItems: "center" }}>
+        <div className="tv-card" style={{ padding: "20px 24px", marginBottom: 20, display: "flex", gap: 28, flexWrap: "wrap", alignItems: "center" }}>
           <div style={{ minWidth: 220 }}>
-            <div style={{ color: COLORS.textMuted, fontSize: 12.5, marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
-              Solde du compte
+            <div style={{ color: COLORS.textMuted, fontSize: 12, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
+              SOLDE DU COMPTE
               {!editingBalance && (
                 <button onClick={() => { setBalanceDraft(String(startingBalance)); setEditingBalance(true); }} style={{ background: "none", border: "none", color: COLORS.textFaint, cursor: "pointer" }}>
                   <Pencil size={11} />
@@ -293,65 +348,65 @@ export default function TradingJournal() {
             </div>
             {editingBalance ? (
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <input autoFocus type="number" value={balanceDraft} onChange={(e) => setBalanceDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveBalance()} style={{ width: 120, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 6, padding: "6px 10px", color: COLORS.text, fontFamily: FONT_MONO, fontSize: 16 }} />
-                <button onClick={saveBalance} style={{ background: COLORS.gold, border: "none", borderRadius: 6, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>OK</button>
+                <input autoFocus type="number" value={balanceDraft} onChange={(e) => setBalanceDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveBalance()} style={{ width: 120, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: "4px 8px", color: COLORS.text, fontFamily: FONT_MONO, fontSize: 15 }} />
+                <button onClick={saveBalance} style={{ background: COLORS.accent, color: "#fff", border: "none", borderRadius: 4, padding: "5px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>OK</button>
               </div>
             ) : (
-              <div style={{ fontFamily: FONT_MONO, fontSize: 32, fontWeight: 700, letterSpacing: "-0.03em" }}>
+              <div style={{ fontFamily: FONT_MONO, fontSize: 28, fontWeight: 700, color: "#F0F3FA" }}>
                 {stats.currentBalance.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
               </div>
             )}
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, color: lineColor, fontSize: 13, fontFamily: FONT_MONO, fontWeight: 500 }}>
-              {positive ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, color: lineColor, fontSize: 13, fontFamily: FONT_MONO }}>
+              {positive ? <ArrowUpRight size={15} /> : <ArrowDownRight size={15} />}
               {fmtMoney(stats.totalPnl)} ({fmtPct(stats.pctChange)})
             </div>
           </div>
 
-          <div style={{ flex: 1, minWidth: 280, height: 120 }}>
-            <div style={{ fontSize: 11.5, color: COLORS.textFaint, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>Courbe d'équité</div>
+          <div style={{ flex: 1, minWidth: 280, height: 110 }}>
+            <div style={{ fontSize: 11, color: COLORS.textMuted, marginBottom: 4, letterSpacing: "0.05em" }}>PERFORMANCE D'ÉQUITÉ</div>
             {stats.curve.length > 1 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={stats.curve} margin={{ top: 8, right: 4, bottom: 0, left: 4 }}>
                   <XAxis dataKey="date" hide />
                   <YAxis domain={["auto", "auto"]} hide />
-                  <Tooltip contentStyle={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 8, fontSize: 12, fontFamily: FONT_MONO, color: COLORS.text }} formatter={(v) => [`${v.toLocaleString("fr-FR")} €`, "Solde"]} />
+                  <Tooltip contentStyle={{ background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 6, fontSize: 12, fontFamily: FONT_MONO, color: COLORS.text }} formatter={(v) => [`${v.toLocaleString("fr-FR")} €`, "Solde"]} />
                   <Area type="monotone" dataKey="balance" stroke={lineColor} strokeWidth={2} fill={lineColor} fillOpacity={0.12} />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
-              <div style={{ height: "80%", display: "flex", alignItems: "center", justifyCenter: "center", color: COLORS.textFaint, fontSize: 12.5, border: `1px dashed ${COLORS.borderSoft}`, borderRadius: 8, padding: 12 }}>
-                La courbe se dessinera automatiquement à chaque trade ajouté.
+              <div style={{ height: "80%", display: "flex", alignItems: "center", color: COLORS.textFaint, fontSize: 12, border: `1px dashed ${COLORS.borderSoft}`, borderRadius: 6, padding: 12 }}>
+                La courbe se mettra à jour à chaque trade clôturé.
               </div>
             )}
           </div>
         </div>
 
-        {/* Key Metrics */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 24 }}>
-          <StatCard icon={<Target size={15} />} label="Taux de réussite" value={stats.winRate === null ? "—" : `${stats.winRate.toFixed(1)} %`} />
-          <StatCard icon={<Percent size={15} />} label="Facteur de profit" value={stats.profitFactor === null ? "—" : stats.profitFactor === Infinity ? "∞" : stats.profitFactor.toFixed(2)} />
-          <StatCard icon={<TrendingUp size={15} />} label="Gain moyen" value={fmtMoney(stats.avgWin)} tone="gain" />
-          <StatCard icon={<TrendingDown size={15} />} label="Perte moyenne" value={fmtMoney(stats.avgLoss)} tone="loss" />
-          <StatCard icon={<Wallet size={15} />} label="Trades clôturés" value={stats.closedCount} />
-          <StatCard icon={<ChevronRight size={15} />} label="Positions ouvertes" value={stats.openCount} />
+        {/* Stats Grid TradingView Style */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 20 }}>
+          <StatCard icon={<Target size={14} />} label="Taux de réussite" value={stats.winRate === null ? "—" : `${stats.winRate.toFixed(1)} %`} />
+          <StatCard icon={<Percent size={14} />} label="Profit Factor" value={stats.profitFactor === null ? "—" : stats.profitFactor === Infinity ? "∞" : stats.profitFactor.toFixed(2)} />
+          <StatCard icon={<TrendingUp size={14} />} label="Gain Moyen" value={fmtMoney(stats.avgWin)} tone="gain" />
+          <StatCard icon={<TrendingDown size={14} />} label="Perte Moyenne" value={fmtMoney(stats.avgLoss)} tone="loss" />
+          <StatCard icon={<Wallet size={14} />} label="Clôturés" value={stats.closedCount} />
+          <StatCard icon={<ChevronRight size={14} />} label="En Cours" value={stats.openCount} />
         </div>
 
-        {/* Trades Table */}
-        <div className="card-glow" style={{ background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 16, overflow: "hidden" }}>
-          <div style={{ padding: "16px 20px", borderBottom: `1px solid ${COLORS.border}`, fontSize: 14, fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>Historique des positions</span>
-            <span style={{ fontSize: 12, color: COLORS.textFaint, fontWeight: 400 }}>{sortedTrades.length} position(s)</span>
+        {/* Table TradingView */}
+        <div className="tv-card" style={{ overflow: "hidden" }}>
+          <div style={{ padding: "14px 18px", borderBottom: `1px solid ${COLORS.border}`, fontSize: 13, fontWeight: 600, color: "#F0F3FA", display: "flex", justifyContent: "space-between" }}>
+            <span>Positions & Historique</span>
+            <span style={{ fontSize: 12, color: COLORS.textMuted, fontWeight: 400 }}>{sortedTrades.length} ordre(s)</span>
           </div>
 
           {sortedTrades.length === 0 ? (
-            <div style={{ padding: "60px 20px", textAlign: "center", color: COLORS.textMuted, fontSize: 13.5 }}>Aucun trade enregistré pour le moment.</div>
+            <div style={{ padding: "50px 20px", textAlign: "center", color: COLORS.textMuted, fontSize: 13 }}>Aucun trade enregistré. Cliquez sur "+ Nouveau Trade".</div>
           ) : (
             <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
                 <thead>
-                  <tr style={{ textAlign: "left", color: COLORS.textFaint, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                    {["Date", "Symbole", "Sens", "Entrée", "Sortie", "Qté", "P&L", "Stratégie", "Graphique", ""].map((h) => (
-                      <th key={h} style={{ padding: "12px 16px", fontWeight: 500, borderBottom: `1px solid ${COLORS.borderSoft}` }}>{h}</th>
+                  <tr style={{ textAlign: "left", color: COLORS.textMuted, fontSize: 11, borderBottom: `1px solid ${COLORS.border}` }}>
+                    {["Date", "Paire", "Sens", "Prix Entrée", "Prix Sortie", "Qté", "P&L", "Stratégie", "Graphique", "Analyse IA", ""].map((h) => (
+                      <th key={h} style={{ padding: "10px 14px", fontWeight: 500 }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -359,35 +414,50 @@ export default function TradingJournal() {
                   {sortedTrades.map((t) => {
                     const pnl = computePnl(t);
                     const isOpen = pnl === null;
+                    const isGoodTrade = pnl !== null && pnl > 0;
                     return (
                       <tr key={t.id} className="row-hover" style={{ borderBottom: `1px solid ${COLORS.borderSoft}` }}>
-                        <td style={{ padding: "12px 16px", color: COLORS.textMuted, fontFamily: FONT_MONO }}>{fmtDate(t.entryDate)}</td>
-                        <td style={{ padding: "12px 16px", fontWeight: 600, letterSpacing: "0.02em" }}>{t.symbol}</td>
-                        <td style={{ padding: "12px 16px" }}>
-                          <span style={{ padding: "3px 8px", borderRadius: 6, color: t.direction === "long" ? COLORS.gain : COLORS.loss, background: t.direction === "long" ? COLORS.gainSoft : COLORS.lossSoft, fontWeight: 600, fontSize: 11.5 }}>
-                            {t.direction === "long" ? "LONG" : "SHORT"}
+                        <td style={{ padding: "10px 14px", color: COLORS.textMuted, fontFamily: FONT_MONO }}>{fmtDate(t.entryDate)}</td>
+                        <td style={{ padding: "10px 14px", fontWeight: 600, color: "#F0F3FA" }}>{t.symbol}</td>
+                        <td style={{ padding: "10px 14px" }}>
+                          <span style={{ padding: "2px 6px", borderRadius: 4, color: t.direction === "long" ? COLORS.gain : COLORS.loss, background: t.direction === "long" ? COLORS.gainSoft : COLORS.lossSoft, fontWeight: 600, fontSize: 11 }}>
+                            {t.direction === "long" ? "BUY" : "SELL"}
                           </span>
                         </td>
-                        <td style={{ padding: "12px 16px", fontFamily: FONT_MONO }}>{Number(t.entryPrice).toLocaleString("fr-FR")}</td>
-                        <td style={{ padding: "12px 16px", fontFamily: FONT_MONO }}>{isOpen ? <span style={{ color: COLORS.gold, fontSize: 12 }}>en cours</span> : Number(t.exitPrice).toLocaleString("fr-FR")}</td>
-                        <td style={{ padding: "12px 16px", fontFamily: FONT_MONO }}>{t.quantity}</td>
-                        <td style={{ padding: "12px 16px", fontFamily: FONT_MONO, fontWeight: 600, color: isOpen ? COLORS.textFaint : pnl >= 0 ? COLORS.gain : COLORS.loss }}>
+                        <td style={{ padding: "10px 14px", fontFamily: FONT_MONO }}>{Number(t.entryPrice).toLocaleString("fr-FR")}</td>
+                        <td style={{ padding: "10px 14px", fontFamily: FONT_MONO }}>{isOpen ? <span style={{ color: COLORS.accent, fontSize: 11.5 }}>EN COURS</span> : Number(t.exitPrice).toLocaleString("fr-FR")}</td>
+                        <td style={{ padding: "10px 14px", fontFamily: FONT_MONO }}>{t.quantity}</td>
+                        <td style={{ padding: "10px 14px", fontFamily: FONT_MONO, fontWeight: 600, color: isOpen ? COLORS.textMuted : pnl >= 0 ? COLORS.gain : COLORS.loss }}>
                           {isOpen ? "—" : fmtMoney(pnl)}
                         </td>
-                        <td style={{ padding: "12px 16px", color: COLORS.textMuted }}>{t.strategy || "—"}</td>
-                        <td style={{ padding: "12px 16px" }}>
+                        <td style={{ padding: "10px 14px", color: COLORS.textMuted }}>{t.strategy || "—"}</td>
+                        <td style={{ padding: "10px 14px" }}>
                           {t.screenshot ? (
-                            <button onClick={() => setSelectedImg(t.screenshot)} style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, color: COLORS.gold, borderRadius: 6, padding: "4px 8px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontSize: 11 }}>
+                            <button onClick={() => setSelectedImg(t.screenshot)} style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, color: COLORS.accent, borderRadius: 4, padding: "3px 7px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontSize: 11 }}>
                               <ImageIcon size={12} /> Voir
                             </button>
                           ) : (
-                            <span style={{ color: COLORS.textFaint, fontSize: 12 }}>—</span>
+                            <span style={{ color: COLORS.textFaint }}>—</span>
                           )}
                         </td>
-                        <td style={{ padding: "12px 16px" }}>
+                        {/* Remarque IA par trade */}
+                        <td style={{ padding: "10px 14px" }}>
+                          {isOpen ? (
+                            <span style={{ color: COLORS.textFaint, fontSize: 11 }}>Position active</span>
+                          ) : isGoodTrade ? (
+                            <span style={{ color: COLORS.gain, fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}>
+                              <CheckCircle2 size={12} /> Bon Trade
+                            </span>
+                          ) : (
+                            <span style={{ color: COLORS.loss, fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}>
+                              <AlertTriangle size={12} /> À réviser
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ padding: "10px 14px" }}>
                           <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                            <button onClick={() => openEditModal(t)} style={{ background: "none", border: "none", color: COLORS.textFaint, cursor: "pointer" }}><Pencil size={13} /></button>
-                            <button onClick={() => deleteTrade(t.id)} style={{ background: "none", border: "none", color: confirmDeleteId === t.id ? COLORS.loss : COLORS.textFaint, cursor: "pointer" }}>
+                            <button onClick={() => openEditModal(t)} style={{ background: "none", border: "none", color: COLORS.textMuted, cursor: "pointer" }}><Pencil size={13} /></button>
+                            <button onClick={() => deleteTrade(t.id)} style={{ background: "none", border: "none", color: confirmDeleteId === t.id ? COLORS.loss : COLORS.textMuted, cursor: "pointer" }}>
                               <Trash2 size={13} />
                             </button>
                           </div>
@@ -402,51 +472,51 @@ export default function TradingJournal() {
         </div>
       </div>
 
-      {/* Modal Form */}
+      {/* Modal Form TradingView */}
       {modalOpen && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(3, 7, 18, 0.75)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16 }}>
-          <div style={{ background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 16, width: "100%", maxWidth: 480, padding: 24, boxShadow: "0 20px 40px rgba(0,0,0,0.4)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 18, alignItems: "center" }}>
-              <div style={{ fontWeight: 600, fontSize: 16 }}>{editingId ? "Modifier la position" : "Nouvelle position"}</div>
-              <button onClick={() => setModalOpen(false)} style={{ background: "none", border: "none", color: COLORS.textFaint, cursor: "pointer" }}><X size={18} /></button>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0, 0, 0, 0.7)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16 }}>
+          <div className="tv-card" style={{ width: "100%", maxWidth: 460, padding: 20, boxShadow: "0 10px 30px rgba(0,0,0,0.5)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16, alignItems: "center" }}>
+              <div style={{ fontWeight: 600, fontSize: 15, color: "#F0F3FA" }}>{editingId ? "Modifier la Position" : "Nouvelle Position"}</div>
+              <button onClick={() => setModalOpen(false)} style={{ background: "none", border: "none", color: COLORS.textMuted, cursor: "pointer" }}><X size={16} /></button>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <input placeholder="Symbole (ex: GOLD, EURUSD)" value={form.symbol} onChange={(e) => setForm({ ...form, symbol: e.target.value })} style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: 10, color: COLORS.text }} />
-              <div style={{ display: "flex", gap: 10 }}>
-                <button onClick={() => setForm({ ...form, direction: "long" })} style={{ flex: 1, padding: 9, background: form.direction === "long" ? COLORS.gainSoft : "transparent", color: form.direction === "long" ? COLORS.gain : COLORS.textMuted, border: `1px solid ${form.direction === "long" ? COLORS.gain : COLORS.border}`, borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>LONG</button>
-                <button onClick={() => setForm({ ...form, direction: "short" })} style={{ flex: 1, padding: 9, background: form.direction === "short" ? COLORS.lossSoft : "transparent", color: form.direction === "short" ? COLORS.loss : COLORS.textMuted, border: `1px solid ${form.direction === "short" ? COLORS.loss : COLORS.border}`, borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>SHORT</button>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <input placeholder="Symbole (ex: GOLD, EURUSD, BTCUSD)" value={form.symbol} onChange={(e) => setForm({ ...form, symbol: e.target.value })} style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => setForm({ ...form, direction: "long" })} style={{ flex: 1, padding: 8, background: form.direction === "long" ? COLORS.gainSoft : "transparent", color: form.direction === "long" ? COLORS.gain : COLORS.textMuted, border: `1px solid ${form.direction === "long" ? COLORS.gain : COLORS.border}`, borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 12 }}>ACHAT (BUY)</button>
+                <button onClick={() => setForm({ ...form, direction: "short" })} style={{ flex: 1, padding: 8, background: form.direction === "short" ? COLORS.lossSoft : "transparent", color: form.direction === "short" ? COLORS.loss : COLORS.textMuted, border: `1px solid ${form.direction === "short" ? COLORS.loss : COLORS.border}`, borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 12 }}>VENTE (SELL)</button>
               </div>
-              <div style={{ display: "flex", gap: 10 }}>
-                <input type="date" value={form.entryDate} onChange={(e) => setForm({ ...form, entryDate: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: 10, color: COLORS.text }} />
-                <input type="number" placeholder="Quantité / Lots" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: 10, color: COLORS.text }} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <input type="date" value={form.entryDate} onChange={(e) => setForm({ ...form, entryDate: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
+                <input type="number" placeholder="Taille / Lots" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
               </div>
-              <div style={{ display: "flex", gap: 10 }}>
-                <input type="number" placeholder="Prix d'entrée" value={form.entryPrice} onChange={(e) => setForm({ ...form, entryPrice: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: 10, color: COLORS.text }} />
-                <input type="number" placeholder="Prix de sortie (optionnel)" value={form.exitPrice} onChange={(e) => setForm({ ...form, exitPrice: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: 10, color: COLORS.text }} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <input type="number" placeholder="Prix d'entrée" value={form.entryPrice} onChange={(e) => setForm({ ...form, entryPrice: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
+                <input type="number" placeholder="Prix de sortie (si fermé)" value={form.exitPrice} onChange={(e) => setForm({ ...form, exitPrice: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
               </div>
-              <input placeholder="Stratégie (ex: FVG, Breaker Block, MSS)" value={form.strategy} onChange={(e) => setForm({ ...form, strategy: e.target.value })} style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: 10, color: COLORS.text }} />
+              <input placeholder="Setup / Stratégie (ex: FVG, ICT, Breaker)" value={form.strategy} onChange={(e) => setForm({ ...form, strategy: e.target.value })} style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
 
-              {/* Image Input */}
-              <div style={{ background: COLORS.surfaceAlt, border: `1px dashed ${COLORS.border}`, borderRadius: 8, padding: 12, textAlign: "center" }}>
-                <div style={{ fontSize: 12, color: COLORS.textMuted, marginBottom: 6 }}>Capture d'écran de l'analyse (TradingView / MT5)</div>
-                <input type="file" accept="image/*" onChange={handleImageUpload} style={{ fontSize: 12, color: COLORS.textFaint }} />
+              {/* Import image TradingView */}
+              <div style={{ background: COLORS.surfaceAlt, border: `1px dashed ${COLORS.border}`, borderRadius: 4, padding: 10, textAlign: "center" }}>
+                <div style={{ fontSize: 11.5, color: COLORS.textMuted, marginBottom: 4 }}>Capture d'écran du graphique (TradingView / MT5)</div>
+                <input type="file" accept="image/*" onChange={handleImageUpload} style={{ fontSize: 11, color: COLORS.textMuted }} />
                 {form.screenshot && (
-                  <div style={{ marginTop: 8, fontSize: 11, color: COLORS.gain }}>✓ Image chargée avec succès</div>
+                  <div style={{ marginTop: 6, fontSize: 11, color: COLORS.gain }}>✓ Screenshot attaché</div>
                 )}
               </div>
 
-              <button onClick={submitForm} style={{ marginTop: 8, background: "linear-gradient(135deg, #F59E0B, #D97706)", color: "#000", border: "none", borderRadius: 8, padding: 12, fontWeight: 700, cursor: "pointer" }}>Enregistrer le trade</button>
+              <button onClick={submitForm} style={{ marginTop: 6, background: COLORS.accent, color: "#FFF", border: "none", borderRadius: 4, padding: 10, fontWeight: 600, cursor: "pointer", fontSize: 13 }}>Enregistrer l'ordre</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Image Modal Viewer */}
+      {/* Screenshot Viewer */}
       {selectedImg && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 }} onClick={() => setSelectedImg(null)}>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 }} onClick={() => setSelectedImg(null)}>
           <div style={{ position: "relative", maxWidth: "90vw", maxHeight: "90vh" }}>
-            <img src={selectedImg} alt="Capture trade" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 12, border: `1px solid ${COLORS.border}` }} />
-            <button onClick={() => setSelectedImg(null)} style={{ position: "absolute", top: -12, right: -12, background: COLORS.surface, border: `1px solid ${COLORS.border}`, color: COLORS.text, borderRadius: "50%", width: 32, height: 32, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={16} /></button>
+            <img src={selectedImg} alt="Graphique Trade" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 8, border: `1px solid ${COLORS.border}` }} />
+            <button onClick={() => setSelectedImg(null)} style={{ position: "absolute", top: -10, right: -10, background: COLORS.surface, border: `1px solid ${COLORS.border}`, color: COLORS.text, borderRadius: "50%", width: 28, height: 28, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={14} /></button>
           </div>
         </div>
       )}
@@ -455,13 +525,13 @@ export default function TradingJournal() {
 }
 
 function StatCard({ icon, label, value, tone }) {
-  const color = tone === "gain" ? COLORS.gain : tone === "loss" ? COLORS.loss : COLORS.text;
+  const color = tone === "gain" ? COLORS.gain : tone === "loss" ? COLORS.loss : "#F0F3FA";
   return (
-    <div style={{ background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: "14px 16px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, color: COLORS.textFaint, fontSize: 11.5, marginBottom: 8 }}>
+    <div className="tv-card" style={{ padding: "12px 14px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, color: COLORS.textMuted, fontSize: 11, marginBottom: 6 }}>
         {icon} {label}
       </div>
-      <div style={{ fontFamily: FONT_MONO, fontSize: 18, fontWeight: 600, color }}>{value}</div>
+      <div style={{ fontFamily: FONT_MONO, fontSize: 16, fontWeight: 600, color }}>{value}</div>
     </div>
   );
 }
