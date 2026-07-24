@@ -1,940 +1,500 @@
-import React, { useState, useEffect, useMemo } from "react";
-import {
-  Plus, X, Trash2, Pencil, TrendingUp, TrendingDown,
-  Wallet, Target, Percent, ArrowUpRight, ArrowDownRight, ChevronRight, Image as ImageIcon,
-  Bot, Sparkles, ExternalLink, Link as LinkIcon, MessageSquare, Calendar, ChevronLeft
-} from "lucide-react";
-import {
-  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer
-} from "recharts";
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calendrier Interactif Moderne</title>
+  <style>
+    :root {
+      --bg-color: #f4f6f9;
+      --card-bg: #ffffff;
+      --primary-color: #2563eb;
+      --primary-hover: #1d4ed8;
+      --text-color: #1e293b;
+      --text-muted: #64748b;
+      --border-color: #e2e8f0;
+      --accent-bg: #eff6ff;
+      --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+      --radius: 16px;
+    }
 
-if (typeof window !== "undefined" && !window.storage) {
-  window.storage = {
-    get: async (key) => ({ value: localStorage.getItem(key) }),
-    set: async (key, val) => {
-      try {
-        localStorage.setItem(key, val);
-        return true;
-      } catch (e) {
-        return false;
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 900px;
+      background-color: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 30px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* Navigation par onglets (Phases) */
+    .tabs-nav {
+      display: flex;
+      background-color: var(--bg-color);
+      padding: 6px;
+      border-radius: 12px;
+      gap: 6px;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 12px 20px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .tab-btn:hover {
+      color: var(--text-color);
+    }
+
+    .tab-btn.active {
+      background-color: var(--card-bg);
+      color: var(--primary-color);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    /* En-tête de contrôle de date */
+    .date-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 15px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .current-title {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--text-color);
+      text-transform: capitalize;
+    }
+
+    .nav-btns {
+      display: flex;
+      gap: 8px;
+    }
+
+    .nav-btn {
+      background: var(--bg-color);
+      border: 1px solid var(--border-color);
+      color: var(--text-color);
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+
+    .nav-btn:hover {
+      background: var(--border-color);
+    }
+
+    /* Phases/Vues */
+    .view-phase {
+      display: none;
+      animation: fadeIn 0.25s ease-in-out;
+    }
+
+    .view-phase.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* --- VUE JOUR --- */
+    .day-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+      background: var(--accent-bg);
+      border-radius: var(--radius);
+      border: 1px solid #dbeafe;
+    }
+
+    .day-tag {
+      font-size: 1.2rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: var(--primary-color);
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    .day-number {
+      font-size: 7rem;
+      font-weight: 900;
+      line-height: 1;
+      color: var(--primary-color);
+      margin-bottom: 10px;
+    }
+
+    .day-details {
+      font-size: 1.5rem;
+      font-weight: 500;
+      color: var(--text-color);
+      text-transform: capitalize;
+    }
+
+    /* --- VUE MOIS --- */
+    .month-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 10px;
+      text-align: center;
+    }
+
+    .weekday-header {
+      font-weight: 600;
+      color: var(--text-muted);
+      padding: 10px 0;
+      font-size: 0.9rem;
+      text-transform: uppercase;
+    }
+
+    .month-day {
+      padding: 16px 0;
+      border-radius: 10px;
+      font-weight: 600;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .month-day:hover:not(.empty) {
+      background-color: var(--border-color);
+    }
+
+    .month-day.empty {
+      background: transparent;
+      cursor: default;
+    }
+
+    .month-day.today {
+      background-color: var(--primary-color);
+      color: white;
+    }
+
+    /* --- VUE ANNÉE --- */
+    .year-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+
+    .year-month-card {
+      background: var(--bg-color);
+      border-radius: 12px;
+      padding: 15px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: 1px solid transparent;
+    }
+
+    .year-month-card:hover {
+      border-color: var(--primary-color);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+
+    .year-month-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+      color: var(--primary-color);
+      text-align: center;
+      text-transform: capitalize;
+    }
+
+    .mini-calendar {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+      font-size: 0.7rem;
+      text-align: center;
+    }
+
+    .mini-day {
+      padding: 4px 0;
+      border-radius: 4px;
+    }
+
+    .mini-day.has-date {
+      color: var(--text-color);
+    }
+
+    .mini-day.today {
+      background-color: var(--primary-color);
+      color: white;
+      font-weight: bold;
+    }
+
+    @media (max-width: 640px) {
+      .year-grid {
+        grid-template-columns: repeat(1, 1fr);
+      }
+      .day-number {
+        font-size: 5rem;
       }
     }
-  };
-}
+  </style>
+</head>
+<body>
 
-const COLORS = {
-  bg: "#131722",
-  surface: "#1E222D",
-  surfaceAlt: "#2A2E39",
-  border: "#2A2E39",
-  borderSoft: "#222631",
-  text: "#D1D4DC",
-  textMuted: "#787B86",
-  textFaint: "#50535E",
-  accent: "#2962FF",
-  accentSoft: "rgba(41, 98, 255, 0.15)",
-  gain: "#089981",
-  gainSoft: "rgba(8, 153, 129, 0.2)",
-  loss: "#F23645",
-  lossSoft: "rgba(242, 54, 69, 0.2)",
-};
+  <div class="container">
+    <!-- Barre de sélection des phases -->
+    <nav class="tabs-nav">
+      <button class="tab-btn active" onclick="switchPhase('day')">Jour</button>
+      <button class="tab-btn" onclick="switchPhase('month')">Mois</button>
+      <button class="tab-btn" onclick="switchPhase('year')">Année</button>
+    </nav>
 
-const FONT_BODY = "-apple-system, BlinkMacSystemFont, 'Trebuchet MS', Roboto, Ubuntu, sans-serif";
-const FONT_MONO = "'JetBrains Mono', 'Courier New', monospace";
+    <!-- En-tête de navigation dynamique -->
+    <div class="date-header">
+      <h1 class="current-title" id="headerTitle">Juillet 2026</h1>
+      <div class="nav-btns">
+        <button class="nav-btn" onclick="navigate(-1)">&lt; Précédent</button>
+        <button class="nav-btn" onclick="goToToday()">Aujourd'hui</button>
+        <button class="nav-btn" onclick="navigate(1)">Suivant &gt;</button>
+      </div>
+    </div>
 
-const uid = () => Math.random().toString(36).slice(2, 10);
-const todayISO = () => new Date().toISOString().slice(0, 10);
+    <!-- PHASE 1 : VUE JOUR -->
+    <div id="dayView" class="view-phase active">
+      <div class="day-container">
+        <div class="day-tag">VUE JOUR</div>
+        <div class="day-number" id="dayBigNumber">25</div>
+        <div class="day-details" id="dayFullDetails">Samedi 25 Juillet 2026</div>
+      </div>
+    </div>
 
-function parseNum(val) {
-  if (val === "" || val === null || val === undefined) return 0;
-  const cleaned = String(val).replace(",", ".");
-  const n = parseFloat(cleaned);
-  return Number.isNaN(n) ? 0 : n;
-}
+    <!-- PHASE 2 : VUE MOIS -->
+    <div id="monthView" class="view-phase">
+      <div class="month-grid" id="monthGrid">
+        <!-- Rempli en JavaScript -->
+      </div>
+    </div>
 
-function fmtMoney(n, opts = {}) {
-  if (n === null || n === undefined || Number.isNaN(n)) return "—";
-  const sign = n > 0 ? "+" : n < 0 ? "−" : "";
-  const abs = Math.abs(n);
-  return `${sign}${abs.toLocaleString("fr-FR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-    ...opts,
-  })} €`;
-}
+    <!-- PHASE 3 : VUE ANNÉE -->
+    <div id="yearView" class="view-phase">
+      <div class="year-grid" id="yearGrid">
+        <!-- Rempli en JavaScript -->
+      </div>
+    </div>
+  </div>
 
-function fmtPct(n) {
-  if (n === null || n === undefined || Number.isNaN(n)) return "—";
-  const sign = n > 0 ? "+" : n < 0 ? "−" : "";
-  return `${sign}${Math.abs(n).toFixed(2)} %`;
-}
+  <script>
+    let currentDate = new Date();
+    let currentPhase = 'day'; // 'day', 'month', or 'year'
 
-function fmtDate(d) {
-  if (!d) return "—";
-  const dt = new Date(d + "T00:00:00");
-  return dt.toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "2-digit" });
-}
+    const weekdays = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+    const months = [
+      'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+    ];
 
-function computePnl(t) {
-  if (t.manualPnl !== "" && t.manualPnl !== null && t.manualPnl !== undefined) {
-    const val = parseNum(t.manualPnl);
-    const fees = parseNum(t.fees) || 0;
-    return val - fees;
-  }
+    function switchPhase(phase) {
+      currentPhase = phase;
 
-  if (t.exitPrice === "" || t.exitPrice === null || t.exitPrice === undefined) return null;
-  const entry = parseNum(t.entryPrice);
-  const exit = parseNum(t.exitPrice);
-  const qty = parseNum(t.quantity) || 1;
-  const fees = parseNum(t.fees) || 0;
-  
-  if (!exit && exit !== 0) return null;
-
-  const dir = t.direction === "short" ? -1 : 1;
-  const raw = (exit - entry) * qty * dir;
-  return raw - fees;
-}
-
-function computeRR(t) {
-  const entry = parseNum(t.entryPrice);
-  const sl = parseNum(t.stopLoss);
-  const tp = parseNum(t.takeProfit);
-  if (!entry || !sl || !tp) return null;
-  
-  const risk = Math.abs(entry - sl);
-  const reward = Math.abs(tp - entry);
-  if (risk === 0) return null;
-  return (reward / risk).toFixed(2);
-}
-
-const emptyForm = {
-  symbol: "",
-  direction: "long",
-  entryDate: todayISO(),
-  entryPrice: "",
-  exitDate: todayISO(),
-  exitPrice: "",
-  manualPnl: "",
-  stopLoss: "",
-  takeProfit: "",
-  quantity: "1",
-  fees: "",
-  strategy: "",
-  notes: "",
-  screenshot: "",
-};
-
-const MONTH_NAMES = [
-  "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
-  "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
-];
-
-export default function TradingJournal() {
-  const [loaded, setLoaded] = useState(false);
-  const [trades, setTrades] = useState([]);
-  const [startingBalance, setStartingBalance] = useState(10000);
-  const [editingBalance, setEditingBalance] = useState(false);
-  const [balanceDraft, setBalanceDraft] = useState("10000");
-  const [modalOpen, setModalOpen] = useState(false);
-  const [form, setForm] = useState(emptyForm);
-  const [editingId, setEditingId] = useState(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-  const [selectedImg, setSelectedImg] = useState(null);
-  const [selectedCalendarYear, setSelectedCalendarYear] = useState(new Date().getFullYear());
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await window.storage.get("journal-data");
-        if (res && res.value) {
-          const parsed = JSON.parse(res.value);
-          setTrades(parsed.trades || []);
-          setStartingBalance(
-            typeof parsed.startingBalance === "number" ? parsed.startingBalance : 10000
-          );
-          setBalanceDraft(String(parsed.startingBalance ?? 10000));
-        }
-      } catch (e) {
-      } finally {
-        setLoaded(true);
-      }
-    })();
-  }, []);
-
-  useEffect(() => {
-    if (!loaded) return;
-    (async () => {
-      try {
-        await window.storage.set(
-          "journal-data",
-          JSON.stringify({ startingBalance, trades })
+      // Mettre à jour les onglets
+      document.querySelectorAll('.tab-btn').forEach((btn, idx) => {
+        btn.classList.toggle('active', 
+          (phase === 'day' && idx === 0) || 
+          (phase === 'month' && idx === 1) || 
+          (phase === 'year' && idx === 2)
         );
-      } catch (e) {}
-    })();
-  }, [trades, startingBalance, loaded]);
+      });
 
-  const stats = useMemo(() => {
-    const closed = trades
-      .map((t) => ({ ...t, pnl: computePnl(t) }))
-      .filter((t) => t.pnl !== null);
-    const open = trades.filter((t) => computePnl(t) === null);
+      // Mettre à jour les conteneurs
+      document.getElementById('dayView').classList.toggle('active', phase === 'day');
+      document.getElementById('monthView').classList.toggle('active', phase === 'month');
+      document.getElementById('yearView').classList.toggle('active', phase === 'year');
 
-    const totalPnl = closed.reduce((s, t) => s + t.pnl, 0);
-    const wins = closed.filter((t) => t.pnl > 0);
-    const losses = closed.filter((t) => t.pnl < 0);
-    const winRate = closed.length ? (wins.length / closed.length) * 100 : null;
-    const avgWin = wins.length ? wins.reduce((s, t) => s + t.pnl, 0) / wins.length : null;
-    const avgLoss = losses.length ? losses.reduce((s, t) => s + t.pnl, 0) / losses.length : null;
-    const grossWin = wins.reduce((s, t) => s + t.pnl, 0);
-    const grossLoss = Math.abs(losses.reduce((s, t) => s + t.pnl, 0));
-    const profitFactor = grossLoss > 0 ? grossWin / grossLoss : grossWin > 0 ? Infinity : null;
+      render();
+    }
 
-    const sortedClosed = [...closed].sort(
-      (a, b) => new Date(a.exitDate || a.entryDate) - new Date(b.exitDate || b.entryDate)
-    );
-    let running = startingBalance;
-    const curve = [{ date: "Départ", balance: running }];
-    sortedClosed.forEach((t) => {
-      running += t.pnl;
-      curve.push({ date: fmtDate(t.exitDate || t.entryDate), balance: Math.round(running * 100) / 100 });
-    });
-
-    const currentBalance = startingBalance + totalPnl;
-    const pctChange = startingBalance ? (totalPnl / startingBalance) * 100 : 0;
-
-    // Daily breakdown for calendar
-    const pnlByDate = {};
-    closed.forEach((t) => {
-      const d = t.exitDate || t.entryDate;
-      if (!d) return;
-      pnlByDate[d] = (pnlByDate[d] || 0) + t.pnl;
-    });
-
-    // Timeframe stats
-    const todayStr = todayISO();
-    const now = new Date();
-    
-    // Day
-    const dayPnl = pnlByDate[todayStr] || 0;
-    const dayRoi = startingBalance ? (dayPnl / startingBalance) * 100 : 0;
-
-    // Week
-    const startOfWeek = new Date(now);
-    const dayOfWeek = now.getDay() === 0 ? 6 : now.getDay() - 1;
-    startOfWeek.setDate(now.getDate() - dayOfWeek);
-    startOfWeek.setHours(0,0,0,0);
-
-    // Month
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-
-    let weekPnl = 0;
-    let monthPnl = 0;
-    let yearPnl = 0;
-
-    closed.forEach((t) => {
-      const d = new Date((t.exitDate || t.entryDate) + "T00:00:00");
-      if (d >= startOfWeek) weekPnl += t.pnl;
-      if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) monthPnl += t.pnl;
-      if (d.getFullYear() === currentYear) yearPnl += t.pnl;
-    });
-
-    const weekRoi = startingBalance ? (weekPnl / startingBalance) * 100 : 0;
-    const monthRoi = startingBalance ? (monthPnl / startingBalance) * 100 : 0;
-    const yearRoi = startingBalance ? (yearPnl / startingBalance) * 100 : 0;
-
-    return {
-      closed,
-      closedCount: closed.length,
-      openCount: open.length,
-      totalPnl,
-      winRate,
-      avgWin,
-      avgLoss,
-      profitFactor,
-      curve,
-      currentBalance,
-      pctChange,
-      pnlByDate,
-      timeframes: {
-        dayPnl, dayRoi,
-        weekPnl, weekRoi,
-        monthPnl, monthRoi,
-        yearPnl, yearRoi
+    function navigate(direction) {
+      if (currentPhase === 'day') {
+        currentDate.setDate(currentDate.getDate() + direction);
+      } else if (currentPhase === 'month') {
+        currentDate.setMonth(currentDate.getMonth() + direction);
+      } else if (currentPhase === 'year') {
+        currentDate.setFullYear(currentDate.getFullYear() + direction);
       }
-    };
-  }, [trades, startingBalance]);
-
-  const aiFeedback = useMemo(() => {
-    if (stats.closedCount === 0) {
-      return {
-        type: "info",
-        title: "Assistant IA Trading",
-        msg: "Enregistre tes premiers trades clôturés pour recevoir une analyse automatique de ton exécution et de ta rentabilité.",
-      };
+      render();
     }
 
-    const roi = stats.pctChange;
-    const roiStr = `${roi >= 0 ? '+' : ''}${roi.toFixed(2)}%`;
-
-    if (stats.winRate !== null && stats.winRate < 40 && (stats.profitFactor === null || stats.profitFactor < 1)) {
-      return {
-        type: "warning",
-        title: `Rentabilité Globale : ${roiStr} (Attention au Risk Management)`,
-        msg: `Ton taux de rentabilité global est à ${roiStr} avec un Win Rate de ${stats.winRate.toFixed(1)}%. Ton Profit Factor est à ${stats.profitFactor ? stats.profitFactor.toFixed(2) : '—'}. Attention aux sorties prématurées ou au sur-trading.`,
-      };
+    function goToToday() {
+      currentDate = new Date();
+      render();
     }
 
-    if (stats.avgWin && stats.avgLoss && Math.abs(stats.avgLoss) > stats.avgWin * 1.5) {
-      return {
-        type: "danger",
-        title: `Rentabilité Globale : ${roiStr} (Ratios R:R Asymétriques)`,
-        msg: `Tes pertes moyennes (${fmtMoney(stats.avgLoss)}) dépassent tes gains moyens (${fmtMoney(stats.avgWin)}). Veille à maintenir un Risk:Reward positif pour protéger ton capital.`,
-      };
+    function selectDate(year, month, day) {
+      currentDate = new Date(year, month, day);
+      switchPhase('day');
     }
 
-    if (stats.winRate && stats.winRate >= 50 && stats.totalPnl > 0) {
-      return {
-        type: "success",
-        title: `Rentabilité Globale : ${roiStr} (Excellente Discipline)`,
-        msg: `Tu es actuellement rentable à ${roiStr} sur ton compte global avec un Win Rate de ${stats.winRate.toFixed(1)}% et ${fmtMoney(stats.totalPnl)} de profit. Continue d'appliquer ton plan avec rigueur.`,
-      };
+    function selectMonth(year, month) {
+      currentDate = new Date(year, month, 1);
+      switchPhase('month');
     }
 
-    return {
-      type: "info",
-      title: `Rentabilité Globale : ${roiStr}`,
-      msg: `Rentabilité actuelle du compte : ${roiStr}. Taux de réussite : ${stats.winRate ? stats.winRate.toFixed(1) : '0'}% sur ${stats.closedCount} trade(s) clôturé(s).`,
-    };
-  }, [stats]);
+    function render() {
+      renderHeader();
+      if (currentPhase === 'day') renderDayView();
+      if (currentPhase === 'month') renderMonthView();
+      if (currentPhase === 'year') renderYearView();
+    }
 
-  const lastTradeAiAnalysis = useMemo(() => {
-    const closed = trades
-      .map((t) => ({ ...t, pnl: computePnl(t) }))
-      .filter((t) => t.pnl !== null);
+    function renderHeader() {
+      const headerTitle = document.getElementById('headerTitle');
+      const year = currentDate.getFullYear();
+      const monthName = months[currentDate.getMonth()];
+      const day = currentDate.getDate();
 
-    if (closed.length === 0) return null;
-
-    const last = closed[closed.length - 1];
-    const tradeRoi = startingBalance ? (last.pnl / startingBalance) * 100 : 0;
-    const rr = computeRR(last);
-
-    let status = "WIN";
-    let statusColor = COLORS.gain;
-    let explanation = "";
-
-    if (last.pnl > 0) {
-      status = "GAGNANT";
-      statusColor = COLORS.gain;
-      if (rr && parseFloat(rr) >= 2) {
-        explanation = `Ce trade a parfaitement respecté le plan avec un Risk:Reward avantageux de 1:${rr}. L'exécution a généré un gain net de ${fmtMoney(last.pnl)}.`;
-      } else {
-        explanation = `Trade clôturé en profit (+${fmtMoney(last.pnl)}). Assure-toi d'optimiser davantage ton Risk:Reward pour maximiser tes gains sur les mouvements suivis.`;
+      if (currentPhase === 'day') {
+        headerTitle.textContent = `${day} ${monthName} ${year}`;
+      } else if (currentPhase === 'month') {
+        headerTitle.textContent = `${monthName} ${year}`;
+      } else if (currentPhase === 'year') {
+        headerTitle.textContent = `${year}`;
       }
-    } else if (last.pnl < 0) {
-      status = "PERDANT";
-      statusColor = COLORS.loss;
-      explanation = `Trade clôturé en perte (-${fmtMoney(Math.abs(last.pnl))}). L'invalidation du plan a été respectée par le Stop Loss. Vérifie si le setup (ex: ${last.strategy || 'Stratégie'}) a été déclenché dans les bonnes conditions de marché.`;
-    } else {
-      status = "NEUTRE";
-      statusColor = COLORS.textMuted;
-      explanation = "Trade clôturé à Break-Even (0 €). Capital préservé.";
     }
 
-    return {
-      symbol: last.symbol,
-      direction: last.direction,
-      pnl: last.pnl,
-      roi: tradeRoi,
-      status,
-      statusColor,
-      explanation,
-      date: last.exitDate || last.entryDate
-    };
-  }, [trades, startingBalance]);
+    /* Render Phase 1: Jour */
+    function renderDayView() {
+      const dayBigNumber = document.getElementById('dayBigNumber');
+      const dayFullDetails = document.getElementById('dayFullDetails');
 
-  const sortedTrades = useMemo(
-    () =>
-      [...trades].sort(
-        (a, b) => new Date(b.entryDate) - new Date(a.entryDate)
-      ),
-    [trades]
-  );
+      const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+      const formattedDate = currentDate.toLocaleDateString('fr-FR', options);
 
-  function openAddModal() {
-    setForm(emptyForm);
-    setEditingId(null);
-    setModalOpen(true);
-  }
-
-  function openEditModal(t) {
-    setForm({
-      symbol: t.symbol,
-      direction: t.direction,
-      entryDate: t.entryDate || todayISO(),
-      entryPrice: t.entryPrice !== undefined && t.entryPrice !== null ? String(t.entryPrice) : "",
-      exitDate: t.exitDate || todayISO(),
-      exitPrice: t.exitPrice !== undefined && t.exitPrice !== null ? String(t.exitPrice) : "",
-      manualPnl: t.manualPnl !== undefined && t.manualPnl !== null ? String(t.manualPnl) : "",
-      stopLoss: t.stopLoss !== undefined && t.stopLoss !== null ? String(t.stopLoss) : "",
-      takeProfit: t.takeProfit !== undefined && t.takeProfit !== null ? String(t.takeProfit) : "",
-      quantity: t.quantity !== undefined && t.quantity !== null ? String(t.quantity) : "1",
-      fees: t.fees !== undefined && t.fees !== null ? String(t.fees) : "",
-      strategy: t.strategy || "",
-      notes: t.notes || "",
-      screenshot: t.screenshot || "",
-    });
-    setEditingId(t.id);
-    setModalOpen(true);
-  }
-
-  function handleImageUpload(e) {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setForm((prev) => ({ ...prev, screenshot: reader.result }));
-      };
-      reader.readAsDataURL(file);
-    }
-  }
-
-  function submitForm() {
-    const symbolClean = form.symbol ? form.symbol.trim().toUpperCase() : "TRADE";
-    const entryDateClean = form.entryDate || todayISO();
-
-    const payload = {
-      ...form,
-      symbol: symbolClean,
-      entryDate: entryDateClean,
-      exitDate: form.exitDate || entryDateClean,
-      entryPrice: parseNum(form.entryPrice),
-      exitPrice: form.exitPrice === "" ? "" : parseNum(form.exitPrice),
-      manualPnl: form.manualPnl === "" ? "" : parseNum(form.manualPnl),
-      stopLoss: form.stopLoss === "" ? "" : parseNum(form.stopLoss),
-      takeProfit: form.takeProfit === "" ? "" : parseNum(form.takeProfit),
-      quantity: parseNum(form.quantity) || 1,
-      fees: parseNum(form.fees) || 0,
-      notes: form.notes || "",
-    };
-
-    if (editingId) {
-      setTrades((prev) => prev.map((t) => (t.id === editingId ? { ...t, ...payload } : t)));
-    } else {
-      setTrades((prev) => [...prev, { id: uid(), ...payload }]);
+      dayBigNumber.textContent = currentDate.getDate();
+      dayFullDetails.textContent = formattedDate;
     }
 
-    setForm(emptyForm);
-    setEditingId(null);
-    setModalOpen(false);
-  }
+    /* Render Phase 2: Mois */
+    function renderMonthView() {
+      const grid = document.getElementById('monthGrid');
+      grid.innerHTML = '';
 
-  function deleteTrade(id) {
-    if (confirmDeleteId === id) {
-      setTrades((prev) => prev.filter((t) => t.id !== id));
-      setConfirmDeleteId(null);
-    } else {
-      setConfirmDeleteId(id);
-      setTimeout(() => setConfirmDeleteId((cur) => (cur === id ? null : cur)), 3000);
+      // En-têtes des jours de la semaine
+      weekdays.forEach(day => {
+        const header = document.createElement('div');
+        header.className = 'weekday-header';
+        header.textContent = day;
+        grid.appendChild(header);
+      });
+
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
+
+      // Premier jour du mois
+      const firstDayIndex = new Date(year, month, 1).getDay();
+      // Ajuster pour commencer par Lundi (0) au lieu de Dimanche (0)
+      const adjustedFirstDay = (firstDayIndex === 0 ? 6 : firstDayIndex - 1);
+
+      const totalDays = new Date(year, month + 1, 0).getDate();
+      const today = new Date();
+
+      // Cases vides avant le 1er du mois
+      for (let i = 0; i < adjustedFirstDay; i++) {
+        const emptyCell = document.createElement('div');
+        emptyCell.className = 'month-day empty';
+        grid.appendChild(emptyCell);
+      }
+
+      // Jours du mois
+      for (let day = 1; day <= totalDays; day++) {
+        const dayCell = document.createElement('div');
+        dayCell.className = 'month-day';
+        dayCell.textContent = day;
+
+        const isToday = today.getDate() === day && 
+                        today.getMonth() === month && 
+                        today.getFullYear() === year;
+
+        if (isToday) dayCell.classList.add('today');
+
+        dayCell.onclick = () => selectDate(year, month, day);
+        grid.appendChild(dayCell);
+      }
     }
-  }
 
-  function saveBalance() {
-    const v = parseNum(balanceDraft);
-    if (v >= 0) setStartingBalance(v);
-    setEditingBalance(false);
-  }
+    /* Render Phase 3: Année */
+    function renderYearView() {
+      const grid = document.getElementById('yearGrid');
+      grid.innerHTML = '';
 
-  const positive = stats.totalPnl >= 0;
-  const lineColor = positive ? COLORS.gain : COLORS.loss;
+      const year = currentDate.getFullYear();
+      const today = new Date();
 
-  return (
-    <div style={{ background: COLORS.bg, color: COLORS.text, fontFamily: FONT_BODY, minHeight: "100vh", padding: "20px 24px 60px" }}>
-      <style>{`
-        * { box-sizing: border-box; }
-        input, textarea, select { font-family: ${FONT_BODY}; }
-        input::placeholder, textarea::placeholder { color: ${COLORS.textFaint}; }
-        input:focus, textarea:focus, select:focus { outline: none; border-color: ${COLORS.accent} !important; }
-        .row-hover:hover { background: ${COLORS.surfaceAlt}; }
-        .tv-card { background: ${COLORS.surface}; border: 1px solid ${COLORS.border}; border-radius: 8px; }
-      `}</style>
+      months.forEach((monthName, monthIndex) => {
+        const card = document.createElement('div');
+        card.className = 'year-month-card';
+        card.onclick = () => selectMonth(year, monthIndex);
 
-      <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-        {/* Top Bar */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, paddingBottom: 16, borderBottom: `1px solid ${COLORS.border}` }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ background: COLORS.accent, color: "#fff", width: 32, height: 32, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 14 }}>TV</div>
-            <div>
-              <h1 style={{ fontWeight: 600, fontSize: 18, margin: 0, color: "#F0F3FA" }}>Trading Journal AI</h1>
-              <span style={{ color: COLORS.textMuted, fontSize: 12 }}>TradingView Terminal & Performance Calendar</span>
-            </div>
-          </div>
-          <button onClick={openAddModal} style={{ display: "flex", alignItems: "center", gap: 6, background: COLORS.accent, color: "#FFF", border: "none", borderRadius: 6, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-            <Plus size={16} /> Nouveau Trade
-          </button>
-        </div>
+        const title = document.createElement('div');
+        title.className = 'year-month-title';
+        title.textContent = monthName;
+        card.appendChild(title);
 
-        {/* Coach IA Feedback Banner */}
-        <div className="tv-card" style={{ padding: "14px 18px", marginBottom: 20, borderLeft: `4px solid ${aiFeedback.type === 'danger' ? COLORS.loss : aiFeedback.type === 'warning' ? '#F59E0B' : aiFeedback.type === 'success' ? COLORS.gain : COLORS.accent}`, display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ color: aiFeedback.type === 'danger' ? COLORS.loss : aiFeedback.type === 'warning' ? '#F59E0B' : aiFeedback.type === 'success' ? COLORS.gain : COLORS.accent }}>
-            <Bot size={22} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#F0F3FA", display: "flex", alignItems: "center", gap: 6 }}>
-              {aiFeedback.title}
-              <Sparkles size={13} style={{ color: COLORS.accent }} />
-            </div>
-            <div style={{ fontSize: 12.5, color: COLORS.textMuted, marginTop: 2 }}>{aiFeedback.msg}</div>
-          </div>
-        </div>
+        const miniCal = document.createElement('div');
+        miniCal.className = 'mini-calendar';
 
-        {/* Analyse IA du Dernier Trade Enregistré */}
-        {lastTradeAiAnalysis && (
-          <div className="tv-card" style={{ padding: "14px 18px", marginBottom: 20, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}` }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.accent, display: "flex", alignItems: "center", gap: 6 }}>
-                <Sparkles size={14} /> ANALYSE IA DU DERNIER TRADE SÉLECTIONNÉ ({lastTradeAiAnalysis.symbol} - {fmtDate(lastTradeAiAnalysis.date)})
-              </div>
-              <div style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: lastTradeAiAnalysis.statusColor, color: "#FFF", fontWeight: 700 }}>
-                {lastTradeAiAnalysis.status}
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-              <div style={{ fontSize: 13, color: "#F0F3FA", flex: 1 }}>
-                {lastTradeAiAnalysis.explanation}
-              </div>
-              <div style={{ fontFamily: FONT_MONO, fontSize: 13, textAlign: "right" }}>
-                <span style={{ color: COLORS.textMuted, fontSize: 11 }}>Impact Capital : </span>
-                <span style={{ fontWeight: 700, color: lastTradeAiAnalysis.pnl >= 0 ? COLORS.gain : COLORS.loss }}>
-                  {fmtMoney(lastTradeAiAnalysis.pnl)} ({fmtPct(lastTradeAiAnalysis.roi)})
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
+        // Jours du mois en mini
+        const totalDays = new Date(year, monthIndex + 1, 0).getDate();
+        for (let d = 1; d <= totalDays; d++) {
+          const miniDay = document.createElement('div');
+          miniDay.className = 'mini-day has-date';
+          miniDay.textContent = d;
 
-        {/* Equity & Balance */}
-        <div className="tv-card" style={{ padding: "20px 24px", marginBottom: 20, display: "flex", gap: 28, flexWrap: "wrap", alignItems: "center" }}>
-          <div style={{ minWidth: 220 }}>
-            <div style={{ color: COLORS.textMuted, fontSize: 12, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
-              SOLDE DU COMPTE
-              {!editingBalance && (
-                <button onClick={() => { setBalanceDraft(String(startingBalance)); setEditingBalance(true); }} style={{ background: "none", border: "none", color: COLORS.textFaint, cursor: "pointer" }}>
-                  <Pencil size={11} />
-                </button>
-              )}
-            </div>
-            {editingBalance ? (
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <input autoFocus type="text" value={balanceDraft} onChange={(e) => setBalanceDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveBalance()} style={{ width: 120, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: "4px 8px", color: COLORS.text, fontFamily: FONT_MONO, fontSize: 15 }} />
-                <button onClick={saveBalance} style={{ background: COLORS.accent, color: "#fff", border: "none", borderRadius: 4, padding: "5px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>OK</button>
-              </div>
-            ) : (
-              <div style={{ fontFamily: FONT_MONO, fontSize: 28, fontWeight: 700, color: "#F0F3FA" }}>
-                {stats.currentBalance.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
-              </div>
-            )}
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, color: lineColor, fontSize: 13, fontFamily: FONT_MONO }}>
-              {positive ? <ArrowUpRight size={15} /> : <ArrowDownRight size={15} />}
-              {fmtMoney(stats.totalPnl)} ({fmtPct(stats.pctChange)})
-            </div>
-          </div>
-
-          <div style={{ flex: 1, minWidth: 280, height: 110 }}>
-            <div style={{ fontSize: 11, color: COLORS.textMuted, marginBottom: 4, letterSpacing: "0.05em" }}>PERFORMANCE D'ÉQUITÉ</div>
-            {stats.curve.length > 1 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={stats.curve} margin={{ top: 8, right: 4, bottom: 0, left: 4 }}>
-                  <XAxis dataKey="date" hide />
-                  <YAxis domain={["auto", "auto"]} hide />
-                  <Tooltip contentStyle={{ background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 6, fontSize: 12, fontFamily: FONT_MONO, color: COLORS.text }} formatter={(v) => [`${v.toLocaleString("fr-FR")} €`, "Solde"]} />
-                  <Area type="monotone" dataKey="balance" stroke={lineColor} strokeWidth={2} fill={lineColor} fillOpacity={0.12} />
-                </AreaChart>
-              </ResponsiveContainer>
-            ) : (
-              <div style={{ height: "80%", display: "flex", alignItems: "center", color: COLORS.textFaint, fontSize: 12, border: `1px dashed ${COLORS.borderSoft}`, borderRadius: 6, padding: 12 }}>
-                La courbe se mettra à jour à chaque trade clôturé.
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Stats Grid */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 20 }}>
-          <StatCard icon={<Target size={14} />} label="Taux de réussite" value={stats.winRate === null ? "—" : `${stats.winRate.toFixed(1)} %`} />
-          <StatCard icon={<Percent size={14} />} label="Profit Factor" value={stats.profitFactor === null ? "—" : stats.profitFactor === Infinity ? "∞" : stats.profitFactor.toFixed(2)} />
-          <StatCard icon={<TrendingUp size={14} />} label="Gain Moyen" value={fmtMoney(stats.avgWin)} tone="gain" />
-          <StatCard icon={<TrendingDown size={14} />} label="Perte Moyenne" value={fmtMoney(stats.avgLoss)} tone="loss" />
-          <StatCard icon={<Wallet size={14} />} label="Clôturés" value={stats.closedCount} />
-          <StatCard icon={<ChevronRight size={14} />} label="En Cours" value={stats.openCount} />
-        </div>
-
-        {/* Table Trades */}
-        <div className="tv-card" style={{ overflow: "hidden", marginBottom: 30 }}>
-          <div style={{ padding: "14px 18px", borderBottom: `1px solid ${COLORS.border}`, fontSize: 13, fontWeight: 600, color: "#F0F3FA", display: "flex", justifyContent: "space-between" }}>
-            <span>Positions & Historique</span>
-            <span style={{ fontSize: 12, color: COLORS.textMuted, fontWeight: 400 }}>{sortedTrades.length} ordre(s)</span>
-          </div>
-
-          {sortedTrades.length === 0 ? (
-            <div style={{ padding: "50px 20px", textAlign: "center", color: COLORS.textMuted, fontSize: 13 }}>Aucun trade enregistré. Cliquez sur "+ Nouveau Trade".</div>
-          ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
-                <thead>
-                  <tr style={{ textAlign: "left", color: COLORS.textMuted, fontSize: 11, borderBottom: `1px solid ${COLORS.border}` }}>
-                    {["Date", "Paire", "Sens", "Prix Entrée", "Stop Loss", "Take Profit", "Prix Sortie", "R:R", "Profit / Perte (€)", "Stratégie", "Observations", "Graphique", ""].map((h) => (
-                      <th key={h} style={{ padding: "10px 14px", fontWeight: 500 }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedTrades.map((t) => {
-                    const pnl = computePnl(t);
-                    const isOpen = pnl === null;
-                    const rr = computeRR(t);
-                    const isUrl = t.screenshot && (t.screenshot.startsWith("http://") || t.screenshot.startsWith("https://"));
-
-                    return (
-                      <tr key={t.id} className="row-hover" style={{ borderBottom: `1px solid ${COLORS.borderSoft}` }}>
-                        <td style={{ padding: "10px 14px", color: COLORS.textMuted, fontFamily: FONT_MONO }}>{fmtDate(t.entryDate)}</td>
-                        <td style={{ padding: "10px 14px", fontWeight: 600, color: "#F0F3FA" }}>{t.symbol}</td>
-                        <td style={{ padding: "10px 14px" }}>
-                          <span style={{ padding: "2px 6px", borderRadius: 4, color: t.direction === "long" ? COLORS.gain : COLORS.loss, background: t.direction === "long" ? COLORS.gainSoft : COLORS.lossSoft, fontWeight: 600, fontSize: 11 }}>
-                            {t.direction === "long" ? "BUY" : "SELL"}
-                          </span>
-                        </td>
-                        <td style={{ padding: "10px 14px", fontFamily: FONT_MONO }}>{t.entryPrice ? parseNum(t.entryPrice).toLocaleString("fr-FR") : "—"}</td>
-                        <td style={{ padding: "10px 14px", fontFamily: FONT_MONO, color: COLORS.loss }}>{t.stopLoss ? parseNum(t.stopLoss).toLocaleString("fr-FR") : "—"}</td>
-                        <td style={{ padding: "10px 14px", fontFamily: FONT_MONO, color: COLORS.gain }}>{t.takeProfit ? parseNum(t.takeProfit).toLocaleString("fr-FR") : "—"}</td>
-                        <td style={{ padding: "10px 14px", fontFamily: FONT_MONO }}>{isOpen ? <span style={{ color: COLORS.accent, fontSize: 11.5 }}>EN COURS</span> : t.exitPrice ? parseNum(t.exitPrice).toLocaleString("fr-FR") : "—"}</td>
-                        <td style={{ padding: "10px 14px", fontFamily: FONT_MONO, color: COLORS.textMuted }}>{rr ? `1:${rr}` : "—"}</td>
-                        <td style={{ padding: "10px 14px", fontFamily: FONT_MONO, fontWeight: 600, color: isOpen ? COLORS.textMuted : pnl >= 0 ? COLORS.gain : COLORS.loss }}>
-                          {isOpen ? "—" : fmtMoney(pnl)}
-                        </td>
-                        <td style={{ padding: "10px 14px", color: COLORS.textMuted }}>{t.strategy || "—"}</td>
-                        <td style={{ padding: "10px 14px", color: COLORS.textMuted, maxWidth: 180, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={t.notes}>
-                          {t.notes ? (
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: COLORS.text }}>
-                              <MessageSquare size={12} style={{ color: COLORS.accent, flexShrink: 0 }} />
-                              {t.notes}
-                            </span>
-                          ) : (
-                            <span style={{ color: COLORS.textFaint }}>—</span>
-                          )}
-                        </td>
-
-                        <td style={{ padding: "10px 14px" }}>
-                          {t.screenshot ? (
-                            <div style={{ display: "flex", gap: 6 }}>
-                              <button onClick={() => setSelectedImg(t.screenshot)} style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, color: COLORS.accent, borderRadius: 4, padding: "3px 7px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontSize: 11 }}>
-                                <ImageIcon size={12} /> Voir
-                              </button>
-                              {isUrl && (
-                                <a href={t.screenshot} target="_blank" rel="noopener noreferrer" style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, color: COLORS.textMuted, borderRadius: 4, padding: "3px 7px", textDecoration: "none", display: "flex", alignItems: "center", fontSize: 11 }}>
-                                  <ExternalLink size={12} />
-                                </a>
-                              )}
-                            </div>
-                          ) : (
-                            <span style={{ color: COLORS.textFaint }}>—</span>
-                          )}
-                        </td>
-                        <td style={{ padding: "10px 14px" }}>
-                          <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                            <button onClick={() => openEditModal(t)} style={{ background: "none", border: "none", color: COLORS.textMuted, cursor: "pointer" }}><Pencil size={13} /></button>
-                            <button onClick={() => deleteTrade(t.id)} style={{ background: "none", border: "none", color: confirmDeleteId === t.id ? COLORS.loss : COLORS.textMuted, cursor: "pointer" }}>
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        {/* CALENDRIER ANNUEL & RENTABILITÉ DÉTAILLÉE */}
-        <div className="tv-card" style={{ padding: "20px 24px", marginTop: 20 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <Calendar size={20} style={{ color: COLORS.accent }} />
-              <h2 style={{ fontSize: 16, fontWeight: 600, color: "#F0F3FA", margin: 0 }}>Calendrier Annuel de Performance</h2>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <button onClick={() => setSelectedCalendarYear(y => y - 1)} style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, color: COLORS.text, borderRadius: 4, padding: "4px 8px", cursor: "pointer" }}>
-                <ChevronLeft size={14} />
-              </button>
-              <span style={{ fontFamily: FONT_MONO, fontWeight: 700, fontSize: 15, color: "#F0F3FA" }}>{selectedCalendarYear}</span>
-              <button onClick={() => setSelectedCalendarYear(y => y + 1)} style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, color: COLORS.text, borderRadius: 4, padding: "4px 8px", cursor: "pointer" }}>
-                <ChevronRight size={14} />
-              </button>
-            </div>
-          </div>
-
-          {/* RENTABILITÉ PAR TIMEFRAME */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 24 }}>
-            <TimeframeCard title="AUJOURD'HUI" pnl={stats.timeframes.dayPnl} roi={stats.timeframes.dayRoi} />
-            <TimeframeCard title="CETTE SEMAINE" pnl={stats.timeframes.weekPnl} roi={stats.timeframes.weekRoi} />
-            <TimeframeCard title="CE MOIS-CI" pnl={stats.timeframes.monthPnl} roi={stats.timeframes.monthRoi} />
-            <TimeframeCard title="CETTE ANNÉE" pnl={stats.timeframes.yearPnl} roi={stats.timeframes.yearRoi} />
-          </div>
-
-          {/* Légende du Calendrier */}
-          <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 16, fontSize: 12, color: COLORS.textMuted }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <div style={{ width: 12, height: 12, borderRadius: 3, background: COLORS.gain }} /> Gain
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <div style={{ width: 12, height: 12, borderRadius: 3, background: COLORS.loss }} /> Perte
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <div style={{ width: 12, height: 12, borderRadius: 3, border: `2px solid ${COLORS.accent}`, background: COLORS.surfaceAlt }} /> Aujourd'hui
-            </div>
-          </div>
-
-          {/* Grille des 12 Mois */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 16 }}>
-            {Array.from({ length: 12 }).map((_, monthIdx) => (
-              <YearMonthView key={monthIdx} year={selectedCalendarYear} month={monthIdx} pnlByDate={stats.pnlByDate} />
-            ))}
-          </div>
-        </div>
-
-      </div>
-
-      {/* Modal Form */}
-      {modalOpen && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0, 0, 0, 0.7)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16 }}>
-          <div className="tv-card" style={{ width: "100%", maxWidth: 480, padding: 20, boxShadow: "0 10px 30px rgba(0,0,0,0.5)", maxHeight: "90vh", overflowY: "auto" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16, alignItems: "center" }}>
-              <div style={{ fontWeight: 600, fontSize: 15, color: "#F0F3FA" }}>{editingId ? "Modifier la Position" : "Nouvelle Position"}</div>
-              <button onClick={() => setModalOpen(false)} style={{ background: "none", border: "none", color: COLORS.textMuted, cursor: "pointer" }}><X size={16} /></button>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <input placeholder="Symbole (ex: GOLD, EURUSD, BTCUSD)" value={form.symbol} onChange={(e) => setForm({ ...form, symbol: e.target.value })} style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
-              
-              <div style={{ display: "flex", gap: 8 }}>
-                <button type="button" onClick={() => setForm({ ...form, direction: "long" })} style={{ flex: 1, padding: 8, background: form.direction === "long" ? COLORS.gainSoft : "transparent", color: form.direction === "long" ? COLORS.gain : COLORS.textMuted, border: `1px solid ${form.direction === "long" ? COLORS.gain : COLORS.border}`, borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 12 }}>ACHAT (BUY)</button>
-                <button type="button" onClick={() => setForm({ ...form, direction: "short" })} style={{ flex: 1, padding: 8, background: form.direction === "short" ? COLORS.lossSoft : "transparent", color: form.direction === "short" ? COLORS.loss : COLORS.textMuted, border: `1px solid ${form.direction === "short" ? COLORS.loss : COLORS.border}`, borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 12 }}>VENTE (SELL)</button>
-              </div>
-
-              {/* Champ P&L Direct / Manuel */}
-              <div style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.accentSoft}`, borderRadius: 4, padding: 8, display: "flex", flexDirection: "column", gap: 4 }}>
-                <label style={{ fontSize: 11, color: COLORS.accent, fontWeight: 600 }}>
-                  Gains / Pertes directs (€) - Saisissez la perte en négatif (ex: -50)
-                </label>
-                <input 
-                  type="text" 
-                  placeholder="ex: +150 ou -50" 
-                  value={form.manualPnl} 
-                  onChange={(e) => setForm({ ...form, manualPnl: e.target.value })} 
-                  style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13, fontFamily: FONT_MONO }} 
-                />
-              </div>
-
-              <div style={{ display: "flex", gap: 8 }}>
-                <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: 10, color: COLORS.textMuted }}>Date Entrée</label>
-                  <input type="date" value={form.entryDate} onChange={(e) => setForm({ ...form, entryDate: e.target.value })} style={{ width: "100%", background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 12 }} />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: 10, color: COLORS.textMuted }}>Date Sortie / Clôture</label>
-                  <input type="date" value={form.exitDate} onChange={(e) => setForm({ ...form, exitDate: e.target.value })} style={{ width: "100%", background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 12 }} />
-                </div>
-              </div>
-
-              <div style={{ display: "flex", gap: 8 }}>
-                <input type="text" placeholder="Taille / Lots (ex: 1)" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
-                <input type="text" placeholder="Prix d'entrée" value={form.entryPrice} onChange={(e) => setForm({ ...form, entryPrice: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
-              </div>
-
-              <div style={{ display: "flex", gap: 8 }}>
-                <input type="text" placeholder="Prix de sortie (si fermé)" value={form.exitPrice} onChange={(e) => setForm({ ...form, exitPrice: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
-                <input type="text" placeholder="Stop Loss" value={form.stopLoss} onChange={(e) => setForm({ ...form, stopLoss: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.lossSoft}`, borderRadius: 4, padding: 8, color: COLORS.loss, fontSize: 13 }} />
-              </div>
-
-              <input type="text" placeholder="Take Profit" value={form.takeProfit} onChange={(e) => setForm({ ...form, takeProfit: e.target.value })} style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.gainSoft}`, borderRadius: 4, padding: 8, color: COLORS.gain, fontSize: 13 }} />
-
-              <input placeholder="Setup / Stratégie (ex: FVG, ICT, Breaker)" value={form.strategy} onChange={(e) => setForm({ ...form, strategy: e.target.value })} style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
-
-              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <label style={{ fontSize: 11.5, color: COLORS.textMuted, display: "flex", alignItems: "center", gap: 4 }}>
-                  <MessageSquare size={12} /> Observations & Commentaires
-                </label>
-                <textarea 
-                  rows={3}
-                  placeholder="Note tes remarques (ex: FVG non respecté, session London, psychologie...)" 
-                  value={form.notes} 
-                  onChange={(e) => setForm({ ...form, notes: e.target.value })} 
-                  style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 12.5, resize: "vertical" }} 
-                />
-              </div>
-
-              <div style={{ background: COLORS.surfaceAlt, border: `1px dashed ${COLORS.border}`, borderRadius: 4, padding: 10, display: "flex", flexDirection: "column", gap: 8 }}>
-                <div style={{ fontSize: 11.5, color: COLORS.textMuted, display: "flex", alignItems: "center", gap: 4 }}>
-                  <LinkIcon size={12} /> Lien URL du graphique
-                </div>
-                <input 
-                  type="text" 
-                  placeholder="Coller l'URL (ex: https://...)" 
-                  value={form.screenshot.startsWith("data:") ? "" : form.screenshot} 
-                  onChange={(e) => setForm({ ...form, screenshot: e.target.value })} 
-                  style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 7, color: COLORS.text, fontSize: 12 }} 
-                />
-                
-                <div style={{ fontSize: 11, color: COLORS.textFaint, textAlign: "center" }}>— OU importer un fichier image —</div>
-                
-                <input type="file" accept="image/*" onChange={handleImageUpload} style={{ fontSize: 11, color: COLORS.textMuted }} />
-                {form.screenshot && (
-                  <div style={{ fontSize: 11, color: COLORS.gain, marginTop: 2 }}>✓ Capture rattachée au trade</div>
-                )}
-              </div>
-
-              <button type="button" onClick={submitForm} style={{ marginTop: 6, background: COLORS.accent, color: "#FFF", border: "none", borderRadius: 4, padding: 10, fontWeight: 600, cursor: "pointer", fontSize: 13 }}>Enregistrer le trade</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Screenshot Viewer Modal */}
-      {selectedImg && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 }} onClick={() => setSelectedImg(null)}>
-          <div style={{ position: "relative", maxWidth: "90vw", maxHeight: "90vh", display: "flex", flexDirection: "column", alignItems: "center" }} onClick={(e) => e.stopPropagation()}>
-            {selectedImg.startsWith("http://") || selectedImg.startsWith("https://") ? (
-              <div style={{ background: COLORS.surface, padding: 16, borderRadius: 8, border: `1px solid ${COLORS.border}`, textAlign: "center", maxWidth: 500 }}>
-                <img src={selectedImg} alt="Aperçu Graphique" style={{ maxWidth: "100%", maxHeight: "60vh", borderRadius: 6, marginBottom: 12 }} onError={(e) => { e.target.style.display = 'none'; }} />
-                <div style={{ fontSize: 13, color: COLORS.text, marginBottom: 12, wordBreak: "break-all" }}>{selectedImg}</div>
-                <a href={selectedImg} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, background: COLORS.accent, color: "#FFF", padding: "8px 16px", borderRadius: 6, textDecoration: "none", fontSize: 13, fontWeight: 600 }}>
-                  Ouvrir le lien dans un nouvel onglet <ExternalLink size={14} />
-                </a>
-              </div>
-            ) : (
-              <img src={selectedImg} alt="Graphique Trade" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 8, border: `1px solid ${COLORS.border}` }} />
-            )}
-            <button onClick={() => setSelectedImg(null)} style={{ position: "absolute", top: -12, right: -12, background: COLORS.surface, border: `1px solid ${COLORS.border}`, color: COLORS.text, borderRadius: "50%", width: 28, height: 28, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={14} /></button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function StatCard({ icon, label, value, tone }) {
-  const color = tone === "gain" ? COLORS.gain : tone === "loss" ? COLORS.loss : "#F0F3FA";
-  return (
-    <div className="tv-card" style={{ padding: "12px 14px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, color: COLORS.textMuted, fontSize: 11, marginBottom: 6 }}>
-        {icon} {label}
-      </div>
-      <div style={{ fontFamily: FONT_MONO, fontSize: 16, fontWeight: 600, color }}>{value}</div>
-    </div>
-  );
-}
-
-function TimeframeCard({ title, pnl, roi }) {
-  const isPositive = pnl >= 0;
-  const color = pnl === 0 ? COLORS.textMuted : isPositive ? COLORS.gain : COLORS.loss;
-
-  return (
-    <div style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 6, padding: "10px 14px" }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.textMuted, letterSpacing: "0.05em", marginBottom: 4 }}>
-        {title}
-      </div>
-      <div style={{ fontFamily: FONT_MONO, fontSize: 15, fontWeight: 700, color }}>
-        {fmtMoney(pnl)}
-      </div>
-      <div style={{ fontFamily: FONT_MONO, fontSize: 11, color, marginTop: 2 }}>
-        {fmtPct(roi)}
-      </div>
-    </div>
-  );
-}
-
-function YearMonthView({ year, month, pnlByDate }) {
-  const todayStr = todayISO();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDayIndex = new Date(year, month, 1).getDay(); // 0 = Sun
-  const adjustedFirstDay = firstDayIndex === 0 ? 6 : firstDayIndex - 1; // 0 = Mon
-
-  const days = [];
-  for (let i = 0; i < adjustedFirstDay; i++) {
-    days.push(null);
-  }
-  for (let d = 1; d <= daysInMonth; d++) {
-    days.push(d);
-  }
-
-  return (
-    <div style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 6, padding: 12 }}>
-      <div style={{ fontSize: 13, fontWeight: 600, color: "#F0F3FA", marginBottom: 10, textAlign: "center" }}>
-        {MONTH_NAMES[month]}
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, textAlign: "center", fontSize: 10, color: COLORS.textMuted, marginBottom: 6 }}>
-        <span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
-        {days.map((day, idx) => {
-          if (!day) return <div key={idx} style={{ height: 26 }} />;
-
-          const monthStr = String(month + 1).padStart(2, "0");
-          const dayStr = String(day).padStart(2, "0");
-          const dateISO = `${year}-${monthStr}-${dayStr}`;
-
-          const isToday = dateISO === todayStr;
-          const hasPnl = pnlByDate[dateISO] !== undefined;
-          const dayPnl = pnlByDate[dateISO] || 0;
-
-          let bg = "transparent";
-          let textColor = COLORS.text;
-          let border = "1px solid transparent";
-
-          if (hasPnl) {
-            if (dayPnl > 0) {
-              bg = COLORS.gain;
-              textColor = "#FFF";
-            } else if (dayPnl < 0) {
-              bg = COLORS.loss;
-              textColor = "#FFF";
-            }
+          if (today.getDate() === d && today.getMonth() === monthIndex && today.getFullYear() === year) {
+            miniDay.classList.add('today');
           }
 
-          if (isToday) {
-            border = `2px solid ${COLORS.accent}`;
-          }
+          miniCal.appendChild(miniDay);
+        }
 
-          return (
-            <div
-              key={idx}
-              title={hasPnl ? `${dateISO} : ${fmtMoney(dayPnl)}` : isToday ? "Aujourd'hui" : dateISO}
-              style={{
-                height: 26,
-                display: "flex",
-                alignItems: "center",
-                justify: "center",
-                borderRadius: 4,
-                background: bg,
-                color: textColor,
-                fontSize: 11,
-                fontFamily: FONT_MONO,
-                fontWeight: isToday || hasPnl ? 700 : 400,
-                border,
-                position: "relative"
-              }}
-            >
-              {day}
-              {isToday && (
-                <div style={{ position: "absolute", top: 2, right: 2, width: 4, height: 4, borderRadius: "50%", background: COLORS.accent }} />
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
+        card.appendChild(miniCal);
+        grid.appendChild(card);
+      });
+    }
+
+    // Initialisation
+    render();
+  </script>
+
+</body>
+</html>
