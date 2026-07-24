@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import {
   Plus, X, Trash2, Pencil, TrendingUp, TrendingDown,
   Wallet, Target, Percent, ArrowUpRight, ArrowDownRight, ChevronRight, Image as ImageIcon,
-  Bot, Sparkles, CheckCircle2, AlertTriangle, ShieldAlert
+  Bot, Sparkles, CheckCircle2, AlertTriangle, ExternalLink, Link as LinkIcon
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer
@@ -24,19 +24,19 @@ if (typeof window !== "undefined" && !window.storage) {
 
 // Couleurs Style TradingView Dark Theme
 const COLORS = {
-  bg: "#131722",          // Fond principal TradingView
-  surface: "#1E222D",     // Cartes & Panneaux
-  surfaceAlt: "#2A2E39",  // Éléments secondaires / Hovers
-  border: "#2A2E39",      // Bordures
+  bg: "#131722",
+  surface: "#1E222D",
+  surfaceAlt: "#2A2E39",
+  border: "#2A2E39",
   borderSoft: "#222631",
-  text: "#D1D4DC",        // Texte principal
-  textMuted: "#787B86",   // Texte secondaire
+  text: "#D1D4DC",
+  textMuted: "#787B86",
   textFaint: "#50535E",
-  accent: "#2962FF",      // Bleu TradingView
+  accent: "#2962FF",
   accentSoft: "rgba(41, 98, 255, 0.15)",
-  gain: "#089981",        // Vert TradingView
+  gain: "#089981",
   gainSoft: "rgba(8, 153, 129, 0.15)",
-  loss: "#F23645",        // Rouge TradingView
+  loss: "#F23645",
   lossSoft: "rgba(242, 54, 69, 0.15)",
 };
 
@@ -175,7 +175,6 @@ export default function TradingJournal() {
     };
   }, [trades, startingBalance]);
 
-  // Analyse IA basique des performances
   const aiFeedback = useMemo(() => {
     if (stats.closedCount === 0) {
       return {
@@ -415,6 +414,8 @@ export default function TradingJournal() {
                     const pnl = computePnl(t);
                     const isOpen = pnl === null;
                     const isGoodTrade = pnl !== null && pnl > 0;
+                    const isUrl = t.screenshot && (t.screenshot.startsWith("http://") || t.screenshot.startsWith("https://"));
+
                     return (
                       <tr key={t.id} className="row-hover" style={{ borderBottom: `1px solid ${COLORS.borderSoft}` }}>
                         <td style={{ padding: "10px 14px", color: COLORS.textMuted, fontFamily: FONT_MONO }}>{fmtDate(t.entryDate)}</td>
@@ -433,14 +434,20 @@ export default function TradingJournal() {
                         <td style={{ padding: "10px 14px", color: COLORS.textMuted }}>{t.strategy || "—"}</td>
                         <td style={{ padding: "10px 14px" }}>
                           {t.screenshot ? (
-                            <button onClick={() => setSelectedImg(t.screenshot)} style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, color: COLORS.accent, borderRadius: 4, padding: "3px 7px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontSize: 11 }}>
-                              <ImageIcon size={12} /> Voir
-                            </button>
+                            <div style={{ display: "flex", gap: 6 }}>
+                              <button onClick={() => setSelectedImg(t.screenshot)} style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, color: COLORS.accent, borderRadius: 4, padding: "3px 7px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontSize: 11 }}>
+                                <ImageIcon size={12} /> Voir
+                              </button>
+                              {isUrl && (
+                                <a href={t.screenshot} target="_blank" rel="noopener noreferrer" style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, color: COLORS.textMuted, borderRadius: 4, padding: "3px 7px", textDecoration: "none", display: "flex", alignItems: "center", fontSize: 11 }}>
+                                  <ExternalLink size={12} />
+                                </a>
+                              )}
+                            </div>
                           ) : (
                             <span style={{ color: COLORS.textFaint }}>—</span>
                           )}
                         </td>
-                        {/* Remarque IA par trade */}
                         <td style={{ padding: "10px 14px" }}>
                           {isOpen ? (
                             <span style={{ color: COLORS.textFaint, fontSize: 11 }}>Position active</span>
@@ -472,7 +479,7 @@ export default function TradingJournal() {
         </div>
       </div>
 
-      {/* Modal Form TradingView */}
+      {/* Modal Form */}
       {modalOpen && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0, 0, 0, 0.7)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16 }}>
           <div className="tv-card" style={{ width: "100%", maxWidth: 460, padding: 20, boxShadow: "0 10px 30px rgba(0,0,0,0.5)" }}>
@@ -484,7 +491,7 @@ export default function TradingJournal() {
               <input placeholder="Symbole (ex: GOLD, EURUSD, BTCUSD)" value={form.symbol} onChange={(e) => setForm({ ...form, symbol: e.target.value })} style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={() => setForm({ ...form, direction: "long" })} style={{ flex: 1, padding: 8, background: form.direction === "long" ? COLORS.gainSoft : "transparent", color: form.direction === "long" ? COLORS.gain : COLORS.textMuted, border: `1px solid ${form.direction === "long" ? COLORS.gain : COLORS.border}`, borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 12 }}>ACHAT (BUY)</button>
-                <button onClick={() => setForm({ ...form, direction: "short" })} style={{ flex: 1, padding: 8, background: form.direction === "short" ? COLORS.lossSoft : "transparent", color: form.direction === "short" ? COLORS.loss : COLORS.textMuted, border: `1px solid ${form.direction === "short" ? COLORS.loss : COLORS.border}`, borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 12 }}>VENTE (SELL)</button>
+                <button onClick={() => setForm({ ...form, direction: "short" })} style={{ flex: 1, padding: 8, background: form.direction === "short" ? COLORS.lossSoft : "transparent", color: form.direction === "short" ? COLORS.loss : COLORS.textMuted, border: `1px solid ${form.direction === "short" ? COLORS.border : COLORS.border}`, borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 12 }}>VENTE (SELL)</button>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <input type="date" value={form.entryDate} onChange={(e) => setForm({ ...form, entryDate: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
@@ -496,12 +503,24 @@ export default function TradingJournal() {
               </div>
               <input placeholder="Setup / Stratégie (ex: FVG, ICT, Breaker)" value={form.strategy} onChange={(e) => setForm({ ...form, strategy: e.target.value })} style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
 
-              {/* Import image TradingView */}
-              <div style={{ background: COLORS.surfaceAlt, border: `1px dashed ${COLORS.border}`, borderRadius: 4, padding: 10, textAlign: "center" }}>
-                <div style={{ fontSize: 11.5, color: COLORS.textMuted, marginBottom: 4 }}>Capture d'écran du graphique (TradingView / MT5)</div>
+              {/* Champ d'URL de screenshot ou fichier */}
+              <div style={{ background: COLORS.surfaceAlt, border: `1px dashed ${COLORS.border}`, borderRadius: 4, padding: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ fontSize: 11.5, color: COLORS.textMuted, display: "flex", alignItems: "center", gap: 4 }}>
+                  <LinkIcon size={12} /> Lien URL du graphique (TradingView / TradeZou)
+                </div>
+                <input 
+                  type="text" 
+                  placeholder="Coller l'URL (ex: https://...)" 
+                  value={form.screenshot.startsWith("data:") ? "" : form.screenshot} 
+                  onChange={(e) => setForm({ ...form, screenshot: e.target.value })} 
+                  style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 7, color: COLORS.text, fontSize: 12 }} 
+                />
+                
+                <div style={{ fontSize: 11, color: COLORS.textFaint, textAlign: "center" }}>— OU importer un fichier image —</div>
+                
                 <input type="file" accept="image/*" onChange={handleImageUpload} style={{ fontSize: 11, color: COLORS.textMuted }} />
                 {form.screenshot && (
-                  <div style={{ marginTop: 6, fontSize: 11, color: COLORS.gain }}>✓ Screenshot attaché</div>
+                  <div style={{ fontSize: 11, color: COLORS.gain, marginTop: 2 }}>✓ Capture rattachée au trade</div>
                 )}
               </div>
 
@@ -511,12 +530,22 @@ export default function TradingJournal() {
         </div>
       )}
 
-      {/* Screenshot Viewer */}
+      {/* Screenshot Viewer Modal */}
       {selectedImg && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 }} onClick={() => setSelectedImg(null)}>
-          <div style={{ position: "relative", maxWidth: "90vw", maxHeight: "90vh" }}>
-            <img src={selectedImg} alt="Graphique Trade" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 8, border: `1px solid ${COLORS.border}` }} />
-            <button onClick={() => setSelectedImg(null)} style={{ position: "absolute", top: -10, right: -10, background: COLORS.surface, border: `1px solid ${COLORS.border}`, color: COLORS.text, borderRadius: "50%", width: 28, height: 28, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={14} /></button>
+          <div style={{ position: "relative", maxWidth: "90vw", maxHeight: "90vh", display: "flex", flexDirection: "column", alignItems: "center" }} onClick={(e) => e.stopPropagation()}>
+            {selectedImg.startsWith("http://") || selectedImg.startsWith("https://") ? (
+              <div style={{ background: COLORS.surface, padding: 16, borderRadius: 8, border: `1px solid ${COLORS.border}`, textAlign: "center", maxWidth: 500 }}>
+                <img src={selectedImg} alt="Aperçu Graphique" style={{ maxWidth: "100%", maxHeight: "60vh", borderRadius: 6, marginBottom: 12 }} onError={(e) => { e.target.style.display = 'none'; }} />
+                <div style={{ fontSize: 13, color: COLORS.text, marginBottom: 12, wordBreak: "break-all" }}>{selectedImg}</div>
+                <a href={selectedImg} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, background: COLORS.accent, color: "#FFF", padding: "8px 16px", borderRadius: 6, textDecoration: "none", fontSize: 13, fontWeight: 600 }}>
+                  Ouvrir le lien dans un nouvel onglet <ExternalLink size={14} />
+                </a>
+              </div>
+            ) : (
+              <img src={selectedImg} alt="Graphique Trade" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 8, border: `1px solid ${COLORS.border}` }} />
+            )}
+            <button onClick={() => setSelectedImg(null)} style={{ position: "absolute", top: -12, right: -12, background: COLORS.surface, border: `1px solid ${COLORS.border}`, color: COLORS.text, borderRadius: "50%", width: 28, height: 28, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={14} /></button>
           </div>
         </div>
       )}
