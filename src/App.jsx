@@ -62,11 +62,13 @@ function fmtMoney(n, opts = {}) {
     ...opts,
   })} €`;
 }
+
 function fmtPct(n) {
   if (n === null || n === undefined || Number.isNaN(n)) return "—";
   const sign = n > 0 ? "+" : n < 0 ? "−" : "";
   return `${sign}${Math.abs(n).toFixed(1)} %`;
 }
+
 function fmtDate(d) {
   if (!d) return "—";
   const dt = new Date(d + "T00:00:00");
@@ -100,6 +102,21 @@ const emptyForm = {
   notes: "",
   screenshot: "",
 };
+
+function StatCard({ icon, label, value, tone }) {
+  const color = tone === "gain" ? COLORS.gain : tone === "loss" ? COLORS.loss : "#F0F3FA";
+  return (
+    <div className="tv-card" style={{ padding: "12px 14px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, color: COLORS.textMuted, fontSize: 11, marginBottom: 4 }}>
+        {icon}
+        <span>{label}</span>
+      </div>
+      <div style={{ fontFamily: FONT_MONO, fontSize: 16, fontWeight: 700, color }}>
+        {value}
+      </div>
+    </div>
+  );
+}
 
 export default function TradingJournal() {
   const [loaded, setLoaded] = useState(false);
@@ -604,36 +621,30 @@ export default function TradingJournal() {
               <div style={{ background: COLORS.surfaceAlt, border: `1px dashed ${COLORS.border}`, borderRadius: 4, padding: 10, textAlign: "center" }}>
                 <div style={{ fontSize: 11, color: COLORS.textMuted, marginBottom: 4 }}>Capture d'écran du graphique (TradingView)</div>
                 <input type="file" accept="image/*" onChange={handleImageUpload} style={{ fontSize: 11, color: COLORS.textMuted }} />
-                {form.screenshot && <div style={{ marginTop: 4, fontSize: 11, color: COLORS.gain }}>✓ Graphique joint</div>}
+                {form.screenshot && (
+                  <div style={{ marginTop: 6, fontSize: 11, color: COLORS.gain }}>Image chargée avec succès</div>
+                )}
               </div>
 
-              <button onClick={submitForm} style={{ marginTop: 6, background: COLORS.accent, color: "#FFF", border: "none", borderRadius: 4, padding: 10, fontWeight: 600, cursor: "pointer", fontSize: 13 }}>Enregistrer dans le Journal</button>
+              <button onClick={submitForm} style={{ marginTop: 10, background: COLORS.accent, color: "#fff", border: "none", borderRadius: 4, padding: 10, fontWeight: 600, cursor: "pointer", fontSize: 13 }}>
+                {editingId ? "Enregistrer les modifications" : "Ajouter le trade"}
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Visualiseur d'Image */}
+      {/* Modal Visualisation de Graphique */}
       {selectedImg && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 }} onClick={() => setSelectedImg(null)}>
-          <div style={{ position: "relative", maxWidth: "90vw", maxHeight: "90vh" }}>
-            <img src={selectedImg} alt="Graphique Trade" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 8, border: `1px solid ${COLORS.border}` }} />
-            <button onClick={() => setSelectedImg(null)} style={{ position: "absolute", top: -10, right: -10, background: COLORS.surface, border: `1px solid ${COLORS.border}`, color: COLORS.text, borderRadius: "50%", width: 28, height: 28, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={14} /></button>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0, 0, 0, 0.85)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60, padding: 20 }}>
+          <div style={{ relative: "relative", maxWidth: "90vw", maxHeight: "90vh" }}>
+            <button onClick={() => setSelectedImg(null)} style={{ position: "absolute", top: -35, right: 0, background: "none", border: "none", color: "#fff", cursor: "pointer" }}>
+              <X size={24} />
+            </button>
+            <img src={selectedImg} alt="Graphique du trade" style={{ maxWidth: "100%", maxHeight: "80vh", borderRadius: 8, border: `1px solid ${COLORS.border}` }} />
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function StatCard({ icon, label, value, tone }) {
-  const color = tone === "gain" ? COLORS.gain : tone === "loss" ? COLORS.loss : "#F0F3FA";
-  return (
-    <div className="tv-card" style={{ padding: "12px 14px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, color: COLORS.textMuted, fontSize: 11, marginBottom: 6 }}>
-        {icon} {label}
-      </div>
-      <div style={{ fontFamily: FONT_MONO, fontSize: 16, fontWeight: 600, color }}>{value}</div>
     </div>
   );
 }
