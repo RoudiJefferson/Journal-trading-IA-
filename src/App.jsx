@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import {
   Plus, X, Trash2, Pencil, TrendingUp, TrendingDown,
   Wallet, Target, Percent, ArrowUpRight, ArrowDownRight, ChevronRight, Image as ImageIcon,
-  Bot, Sparkles, CheckCircle2, AlertTriangle, Calendar, Filter, ArrowUpFromLine, ArrowDownToLine
+  Bot, Sparkles, CheckCircle2, AlertTriangle, Calendar, Filter, ArrowUpFromLine, ArrowDownToLine, Clipboard
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer
@@ -77,7 +77,7 @@ function fmtDate(d) {
 }
 
 function computePnl(t) {
-  if (t.type === "transfer") return null; // Les retraits/dépôts ne sont pas des trades
+  if (t.type === "transfer") return null;
   if (t.exitPrice !== "" && t.exitPrice !== null && t.exitPrice !== undefined) {
     const dir = t.direction === "short" ? -1 : 1;
     const raw = (Number(t.exitPrice) - Number(t.entryPrice)) * Number(t.quantity) * dir;
@@ -90,7 +90,7 @@ function computePnl(t) {
 }
 
 const emptyForm = {
-  type: "trade", // "trade" ou "transfer"
+  type: "trade",
   symbol: "XAUUSD (Gold)",
   direction: "long",
   entryDate: todayISO(),
@@ -104,8 +104,7 @@ const emptyForm = {
   strategy: "Liquidity Sweep",
   notes: "",
   screenshot: "",
-  // Champs pour retraits / dépôts
-  transferType: "withdrawal", // "withdrawal" ou "deposit"
+  transferType: "withdrawal",
   transferAmount: "",
 };
 
@@ -189,7 +188,6 @@ export default function TradingJournal() {
     const grossLoss = Math.abs(losses.reduce((s, t) => s + t.pnl, 0));
     const profitFactor = grossLoss > 0 ? grossWin / grossLoss : grossWin > 0 ? Infinity : null;
 
-    // Calcul de la courbe d'équité en prenant en compte les Trades ET les Transferts
     const allEvents = [...trades].sort(
       (a, b) => new Date(a.exitDate || a.entryDate) - new Date(b.exitDate || b.entryDate)
     );
@@ -313,11 +311,32 @@ export default function TradingJournal() {
   function handleImageUpload(e) {
     const file = e.target.files[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setForm((prev) => ({ ...prev, screenshot: reader.result }));
-      };
-      reader.readAsDataURL(file);
+      processImageFile(file);
+    }
+  }
+
+  function processImageFile(file) {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setForm((prev) => ({ ...prev, screenshot: reader.result }));
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // Handler pour le copier/coller (Ctrl+V) d'image
+  function handlePaste(e) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf("image") !== -1) {
+        const blob = items[i].getAsFile();
+        if (blob) {
+          processImageFile(blob);
+          e.preventDefault();
+          break;
+        }
+      }
     }
   }
 
@@ -410,6 +429,7 @@ export default function TradingJournal() {
         .tv-card { background: ${COLORS.surface}; border: 1px solid ${COLORS.border}; border-radius: 8px; }
         .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 10px; }
         .cal-cell { background: ${COLORS.bg}; border: 1px solid ${COLORS.borderSoft}; border-radius: 6px; min-height: 65px; padding: 6px; display: flex; flex-direction: column; justify-content: space-between; }
+        .paste-dropzone:focus { border-color: ${COLORS.accent} !important; background: rgba(41, 98, 255, 0.05); }
       `}</style>
 
       <div style={{ maxWidth: 1200, margin: "0 auto" }}>
@@ -716,12 +736,22 @@ export default function TradingJournal() {
 
                 <textarea placeholder="Notes / Remarques sur la session..." value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 12 }} />
 
-                {/* Upload Image */}
-                <div style={{ background: COLORS.surfaceAlt, border: `1px dashed ${COLORS.border}`, borderRadius: 4, padding: 10, textAlign: "center" }}>
-                  <div style={{ fontSize: 11, color: COLORS.textMuted, marginBottom: 4 }}>Capture d'écran du graphique (TradingView)</div>
+                {/* Upload & Copier/Coller Image */}
+                <div 
+                  tabIndex={0} 
+                  onPaste={handlePaste} 
+                  className="paste-dropzone"
+                  style={{ background: COLORS.surfaceAlt, border: `1px dashed ${COLORS.border}`, borderRadius: 6, padding: "12px 10px", textAlign: "center", outline: "none", cursor: "pointer" }}
+                >
+                  <div style={{ fontSize: 11, color: COLORS.textMuted, marginBottom: 6, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                    <Clipboard size={14} style={{ color: COLORS.accent }} />
+                    <span>Colle l'image ici (<b>Ctrl + V</b>) ou choisis un fichier</span>
+                  </div>
                   <input type="file" accept="image/*" onChange={handleImageUpload} style={{ fontSize: 11, color: COLORS.textMuted }} />
                   {form.screenshot && (
-                    <div style={{ marginTop: 6, fontSize: 11, color: COLORS.gain }}>Image chargée avec succès</div>
+                    <div style={{ marginTop: 8, fontSize: 11, color: COLORS.gain, display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                      <CheckCircle2 size={12} /> Image attachée avec succès
+                    </div>
                   )}
                 </div>
               </div>
