@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-// --- DONNÉES DE DÉPART (Exemples) ---
+// --- DONNÉES DE DÉPART ---
 const initialTrades = [
   {
     id: 1,
@@ -70,8 +70,8 @@ const monthsList = [
 ];
 const weekdays = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
-// Algorithme de génération du rapport IA
 function getIAReport(date) {
+  if (!date) return { score: 0, productivity: '0%', focus: '-', window: '-', timeline: [], recommendation: '' };
   const d = date.getDate();
   const m = date.getMonth();
   const y = date.getFullYear();
@@ -99,14 +99,10 @@ function getIAReport(date) {
 }
 
 export default function App() {
-  // --- ÉTATS DU JOURNAL ---
-  const [trades, setTrades] = useState(() => {
-    const saved = localStorage.getItem('rm_tv_journal_data');
-    return saved ? JSON.parse(saved) : initialTrades;
-  });
-
+  const [mounted, setMounted] = useState(false);
+  const [trades, setTrades] = useState([]);
   const [formData, setFormData] = useState({
-    date: new Date().toISOString().split('T')[0],
+    date: '',
     pair: 'XAUUSD (Gold)',
     type: 'BUY',
     entry: '',
@@ -120,24 +116,38 @@ export default function App() {
   });
 
   const [filterPair, setFilterPair] = useState('ALL');
-
-  // --- ÉTATS DU CALENDRIER ---
-  const [calendarDate, setCalendarDate] = useState(new Date());
+  const [calendarDate, setCalendarDate] = useState(null);
   const [calendarPhase, setCalendarPhase] = useState('month');
+
+  // --- INITIALISATION CÔTÉ CLIENT (Empêche l'erreur Hydration #419) ---
+  useEffect(() => {
+    const saved = localStorage.getItem('rm_tv_journal_data');
+    setTrades(saved ? JSON.parse(saved) : initialTrades);
+    const now = new Date();
+    setCalendarDate(now);
+    setFormData(prev => ({ ...prev, date: now.toISOString().split('T')[0] }));
+    setMounted(true);
+  }, []);
 
   // Sauvegarde automatique
   useEffect(() => {
-    localStorage.setItem('rm_tv_journal_data', JSON.stringify(trades));
-  }, [trades]);
+    if (mounted) {
+      localStorage.setItem('rm_tv_journal_data', JSON.stringify(trades));
+    }
+  }, [trades, mounted]);
 
-  // --- STATISTIQUES GLOBALES ---
+  if (!mounted || !calendarDate) {
+    return <div style={{ color: '#fff', textAlign: 'center', padding: '50px' }}>Chargement du journal...</div>;
+  }
+
+  // --- STATISTIQUES ---
   const totalTrades = trades.length;
   const wins = trades.filter(t => t.pnl > 0).length;
   const losses = trades.filter(t => t.pnl < 0).length;
   const winRate = totalTrades > 0 ? ((wins / totalTrades) * 100).toFixed(1) : 0;
   const netPnL = trades.reduce((acc, t) => acc + (parseFloat(t.pnl) || 0), 0);
 
-  // --- CALCUL DE LA COURBE D'ÉQUITÉ (PROGRESSION) ---
+  // --- COURBE D'ÉQUITÉ ---
   const sortedTradesForChart = [...trades].sort((a, b) => new Date(a.date) - new Date(b.date));
   let cumulativePnL = 0;
   const equityPoints = sortedTradesForChart.map((t) => {
@@ -145,7 +155,7 @@ export default function App() {
     return { date: t.date, pnl: t.pnl, total: cumulativePnL, pair: t.pair };
   });
 
-  // --- HANDLERS FORMULAIRE ---
+  // --- HANDLERS ---
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -196,7 +206,6 @@ export default function App() {
     }
   };
 
-  // --- HANDLERS CALENDRIER ---
   const navigateCalendar = (direction) => {
     const d = new Date(calendarDate);
     if (calendarPhase === 'day') d.setDate(d.getDate() + direction);
@@ -231,7 +240,6 @@ export default function App() {
     ? trades 
     : trades.filter(t => t.pair.toLowerCase().includes(filterPair.toLowerCase()));
 
-  // --- COMPOSANT GRAPHIQUE (SVG EQUITY CURVE) CORRIGÉ ---
   const renderEquityChart = () => {
     if (equityPoints.length === 0) {
       return <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '40px 0' }}>Aucune donnée de trade pour afficher la courbe.</div>;
@@ -256,7 +264,6 @@ export default function App() {
     };
 
     const zeroY = getY(0);
-
     const pointsPath = equityPoints.map((p, i) => `${getX(i)},${getY(p.total)}`).join(' L ');
     const areaPath = `M ${getX(0)},${zeroY} L ${pointsPath} L ${getX(equityPoints.length - 1)},${zeroY} Z`;
 
@@ -278,26 +285,16 @@ export default function App() {
             </linearGradient>
           </defs>
 
-          {/* Ligne 0 PnL */}
           <line x1={padding} y1={zeroY} x2={width - padding} y2={zeroY} stroke="#2a364f" strokeDasharray="4 4" strokeWidth="1" />
-
-          {/* Remplissage en dégradé sous la courbe */}
           <path d={areaPath} fill={`url(#${gradientId})`} />
-
-          {/* Courbe principale */}
           <path d={`M ${pointsPath}`} fill="none" stroke={lineColor} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
 
-          {/* Points cliquables avec PnL */}
-          {equityPoints.map((p, i) => {
-            const cx = getX(i);
-            const cy = getY(p.total);
-            return (
-              <g key={i} className="chart-point-group">
-                <circle cx={cx} cy={cy} r="5" fill={lineColor} stroke="#0b0f19" strokeWidth="2" />
-                <title>{`${p.date} (${p.pair}): ${p.pnl >= 0 ? '+' : ''}${p.pnl}$ | Total: ${p.total.toFixed(2)}$`}</title>
-              </g>
-            );
-          })}
+          {equityPoints.map((p, i) => (
+            <g key={i}>
+              <circle cx={getX(i)} cy={getY(p.total)} r="5" fill={lineColor} stroke="#0b0f19" strokeWidth="2" />
+              <title>{`${p.date} (${p.pair}): ${p.pnl >= 0 ? '+' : ''}${p.pnl}$ | Total: ${p.total.toFixed(2)}$`}</title>
+            </g>
+          ))}
         </svg>
       </div>
     );
@@ -327,11 +324,9 @@ export default function App() {
         body { background-color: var(--bg-main); color: var(--text); font-family: 'Inter', system-ui, -apple-system, sans-serif; padding: 20px; }
         .app-viewport { max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
 
-        /* HEADER */
         .app-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 16px; }
         .app-title { font-size: 1.8rem; font-weight: 800; background: linear-gradient(90deg, var(--primary), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 
-        /* KPI METRICS */
         .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
         .kpi-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
         .kpi-label { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; font-weight: 700; }
@@ -339,14 +334,11 @@ export default function App() {
         .kpi-value.green { color: var(--green); }
         .kpi-value.red { color: var(--red); }
 
-        /* GRAPH CARD */
         .graph-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
 
-        /* MAIN CONTENT LAYOUT */
         .main-layout { display: grid; grid-template-columns: 360px 1fr; gap: 24px; }
         @media (max-width: 960px) { .main-layout { grid-template-columns: 1fr; } }
 
-        /* FORM */
         .form-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; height: fit-content; }
         .section-title { font-size: 1.1rem; font-weight: 800; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; color: var(--primary); }
         .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
@@ -359,7 +351,6 @@ export default function App() {
         .btn-submit { background: var(--primary); color: #000; font-weight: 800; padding: 12px; border: none; border-radius: 8px; cursor: pointer; width: 100%; margin-top: 6px; }
         .btn-submit:hover { opacity: 0.9; }
 
-        /* TABLE */
         .content-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; display: flex; flex-direction: column; gap: 16px; }
         .table-filter-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
         .trade-table-wrapper { overflow-x: auto; }
@@ -372,7 +363,6 @@ export default function App() {
         .badge-buy { background: rgba(56, 189, 248, 0.15); color: var(--primary); }
         .badge-sell { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
 
-        /* CALENDRIER TRADINGVIEW INTEGRÉ */
         .calendar-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; display: flex; flex-direction: column; gap: 20px; }
         .cal-nav { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 14px; }
         .cal-tabs { display: flex; gap: 6px; background: #0f172a; padding: 4px; border-radius: 8px; border: 1px solid var(--border); }
@@ -381,7 +371,6 @@ export default function App() {
         .btn-nav { background: #0f172a; border: 1px solid var(--border); color: var(--text); padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 0.85rem; }
         .btn-nav:hover { border-color: var(--primary); color: var(--primary); }
 
-        /* CALENDAR MONTH GRID */
         .month-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; }
         .cal-weekday { text-align: center; color: var(--text-muted); font-size: 0.8rem; font-weight: 700; padding-bottom: 6px; }
         .cal-day-cell { background: #0f172a; border: 1px solid var(--border); border-radius: 10px; min-height: 95px; padding: 8px; cursor: pointer; display: flex; flex-direction: column; justify-content: space-between; transition: all 0.2s; }
@@ -391,12 +380,10 @@ export default function App() {
         .cal-day-num { font-weight: 800; font-size: 1rem; }
         .cal-ia-tag { font-size: 0.65rem; font-weight: 700; padding: 2px 6px; border-radius: 10px; background: rgba(129, 140, 248, 0.15); color: var(--accent); }
 
-        /* TRADING BADGES IN CALENDAR */
         .pnl-badge-cal { padding: 4px 6px; border-radius: 6px; font-weight: 800; font-size: 0.78rem; text-align: center; margin-top: 4px; }
         .pnl-badge-win { background: var(--green-bg); color: var(--green); border: 1px solid rgba(34, 197, 94, 0.3); }
         .pnl-badge-loss { background: var(--red-bg); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.3); }
 
-        /* DAY VUE DETAIL */
         .day-view-container { display: grid; grid-template-columns: 240px 1fr; gap: 20px; }
         .day-hero-card { background: linear-gradient(135deg, rgba(56, 189, 248, 0.1), rgba(129, 140, 248, 0.1)); border: 1px solid var(--primary); border-radius: var(--radius); padding: 24px; text-align: center; }
         .day-hero-num { font-size: 4.5rem; font-weight: 900; color: var(--primary); line-height: 1; }
@@ -405,7 +392,6 @@ export default function App() {
         .ia-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
         .ia-metric-card { background: var(--bg-card); border: 1px solid var(--border); padding: 10px; border-radius: 8px; text-align: center; }
 
-        /* VUE ANNÉE */
         .year-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
         .year-month-card { background: #0f172a; border: 1px solid var(--border); border-radius: 10px; padding: 12px; cursor: pointer; }
         .year-month-card:hover { border-color: var(--primary); }
@@ -453,7 +439,6 @@ export default function App() {
 
       {/* FORMULAIRE & HISTORIQUE */}
       <main className="main-layout">
-        {/* FORMULAIRE */}
         <div className="form-card">
           <div className="section-title">✍️ Saisir un Trade</div>
           <form onSubmit={handleAddTrade}>
@@ -516,7 +501,6 @@ export default function App() {
           </form>
         </div>
 
-        {/* HISTORIQUE */}
         <div className="content-card">
           <div className="table-filter-bar">
             <div className="section-title" style={{ marginBottom: 0 }}>📊 Journal des Trades</div>
@@ -581,7 +565,7 @@ export default function App() {
         </div>
       </main>
 
-      {/* CALENDRIER TRADING DU BAS DE PAGE */}
+      {/* CALENDRIER TRADING */}
       <section className="calendar-section">
         <div className="cal-nav">
           <div>
@@ -603,7 +587,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* VUE MOIS */}
         {calendarPhase === 'month' && (
           <div className="month-grid">
             {weekdays.map(w => <div key={w} className="cal-weekday">{w}</div>)}
@@ -637,7 +620,6 @@ export default function App() {
                       <span className="cal-ia-tag">IA {ia.score}%</span>
                     </div>
 
-                    {/* AFFICHAGE DES TRADES ENREGISTRÉS SUR LE CALENDRIER */}
                     {dayPnL !== null ? (
                       <div className={`pnl-badge-cal ${dayPnL >= 0 ? 'pnl-badge-win' : 'pnl-badge-loss'}`}>
                         {dayPnL >= 0 ? `+${dayPnL}$` : `${dayPnL}$`}
@@ -653,7 +635,6 @@ export default function App() {
           </div>
         )}
 
-        {/* VUE JOUR */}
         {calendarPhase === 'day' && (
           <div className="day-view-container">
             <div className="day-hero-card">
@@ -663,7 +644,6 @@ export default function App() {
             </div>
 
             <div className="ia-report-box">
-              {/* HISTORIQUE DE LA JOURNÉE DANS LA VUE JOUR */}
               <div style={{ background: 'var(--bg-card)', padding: 12, borderRadius: 8, border: '1px solid var(--border)' }}>
                 <span style={{ fontWeight: 800, color: 'var(--primary)', fontSize: '0.9rem' }}>📊 Trades exécutés pour ce jour :</span>
                 {tradesForCurrentDate.length === 0 ? (
@@ -682,7 +662,6 @@ export default function App() {
                 )}
               </div>
 
-              {/* RAPPORT PRÉDICTIF IA */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontWeight: 800, color: 'var(--accent)' }}>✨ Rapport de session IA</span>
                 <span className="cal-ia-tag" style={{ fontSize: '0.75rem', padding: '4px 8px' }}>Probabilité Succès : {iaReport.score}%</span>
@@ -710,7 +689,6 @@ export default function App() {
           </div>
         )}
 
-        {/* VUE ANNÉE */}
         {calendarPhase === 'year' && (
           <div className="year-grid">
             {monthsList.map((m, idx) => (
