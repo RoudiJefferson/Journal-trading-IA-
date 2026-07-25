@@ -123,7 +123,7 @@ export default function App() {
 
   // --- ÉTATS DU CALENDRIER ---
   const [calendarDate, setCalendarDate] = useState(new Date());
-  const [calendarPhase, setCalendarPhase] = useState('month'); // 'day', 'month', 'year'
+  const [calendarPhase, setCalendarPhase] = useState('month');
 
   // Sauvegarde automatique
   useEffect(() => {
@@ -189,6 +189,13 @@ export default function App() {
     }
   };
 
+  const handleResetData = () => {
+    if (window.confirm('Voulez-vous réinitialiser toutes les données ?')) {
+      localStorage.removeItem('rm_tv_journal_data');
+      setTrades([]);
+    }
+  };
+
   // --- HANDLERS CALENDRIER ---
   const navigateCalendar = (direction) => {
     const d = new Date(calendarDate);
@@ -224,7 +231,7 @@ export default function App() {
     ? trades 
     : trades.filter(t => t.pair.toLowerCase().includes(filterPair.toLowerCase()));
 
-  // --- COMPOSANT GRAPHIQUE (SVG EQUITY CURVE) ---
+  // --- COMPOSANT GRAPHIQUE (SVG EQUITY CURVE) CORRIGÉ ---
   const renderEquityChart = () => {
     if (equityPoints.length === 0) {
       return <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '40px 0' }}>Aucune donnée de trade pour afficher la courbe.</div>;
@@ -239,7 +246,7 @@ export default function App() {
     const maxVal = Math.max(100, ...values);
 
     const getX = (idx) => {
-      if (equityPoints.length === 1) return width / 2;
+      if (equityPoints.length <= 1) return width / 2;
       return padding + (idx / (equityPoints.length - 1)) * (width - padding * 2);
     };
 
@@ -411,7 +418,7 @@ export default function App() {
           <h1 className="app-title">RM TRADING JOURNAL</h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Interface Pro TradingView • Suivi d'Équité & Calendrier IA</p>
         </div>
-        <button className="btn-nav" onClick={() => localStorage.clear() || setTrades([])}>Réinitialiser</button>
+        <button className="btn-nav" onClick={handleResetData}>Réinitialiser</button>
       </header>
 
       {/* STATISTIQUES KPI */}
@@ -630,7 +637,7 @@ export default function App() {
                       <span className="cal-ia-tag">IA {ia.score}%</span>
                     </div>
 
-                    {/* AFFICHAGE DES TRADES REGISTRÉS SUR LE CALENDRIER */}
+                    {/* AFFICHAGE DES TRADES ENREGISTRÉS SUR LE CALENDRIER */}
                     {dayPnL !== null ? (
                       <div className={`pnl-badge-cal ${dayPnL >= 0 ? 'pnl-badge-win' : 'pnl-badge-loss'}`}>
                         {dayPnL >= 0 ? `+${dayPnL}$` : `${dayPnL}$`}
