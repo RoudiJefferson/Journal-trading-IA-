@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import {
   Plus, X, Trash2, Pencil, TrendingUp, TrendingDown,
   Wallet, Target, Percent, ArrowUpRight, ArrowDownRight, ChevronRight, Image as ImageIcon,
-  Bot, Sparkles, CheckCircle2, AlertTriangle, Calendar, Filter
+  Bot, Sparkles, CheckCircle2, AlertTriangle, Calendar, Filter, ArrowUpFromLine, ArrowDownToLine
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer
@@ -38,6 +38,7 @@ const COLORS = {
   gainSoft: "rgba(8, 153, 129, 0.15)",
   loss: "#F23645",
   lossSoft: "rgba(242, 54, 69, 0.15)",
+  warning: "#F59E0B"
 };
 
 const FONT_BODY = "-apple-system, BlinkMacSystemFont, 'Trebuchet MS', Roboto, Ubuntu, sans-serif";
@@ -76,6 +77,7 @@ function fmtDate(d) {
 }
 
 function computePnl(t) {
+  if (t.type === "transfer") return null; // Les retraits/dépôts ne sont pas des trades
   if (t.exitPrice !== "" && t.exitPrice !== null && t.exitPrice !== undefined) {
     const dir = t.direction === "short" ? -1 : 1;
     const raw = (Number(t.exitPrice) - Number(t.entryPrice)) * Number(t.quantity) * dir;
@@ -88,6 +90,7 @@ function computePnl(t) {
 }
 
 const emptyForm = {
+  type: "trade", // "trade" ou "transfer"
   symbol: "XAUUSD (Gold)",
   direction: "long",
   entryDate: todayISO(),
@@ -101,6 +104,9 @@ const emptyForm = {
   strategy: "Liquidity Sweep",
   notes: "",
   screenshot: "",
+  // Champs pour retraits / dépôts
+  transferType: "withdrawal", // "withdrawal" ou "deposit"
+  transferAmount: "",
 };
 
 function StatCard({ icon, label, value, tone }) {
@@ -166,10 +172,12 @@ export default function TradingJournal() {
   }, [trades, startingBalance, loaded]);
 
   const stats = useMemo(() => {
-    const closed = trades
+    const onlyTrades = trades.filter((t) => t.type !== "transfer");
+    
+    const closed = onlyTrades
       .map((t) => ({ ...t, pnl: computePnl(t) }))
       .filter((t) => t.pnl !== null);
-    const open = trades.filter((t) => computePnl(t) === null);
+    const open = onlyTrades.filter((t) => computePnl(t) === null);
 
     const totalPnl = closed.reduce((s, t) => s + t.pnl, 0);
     const wins = closed.filter((t) => t.pnl > 0);
@@ -181,17 +189,34 @@ export default function TradingJournal() {
     const grossLoss = Math.abs(losses.reduce((s, t) => s + t.pnl, 0));
     const profitFactor = grossLoss > 0 ? grossWin / grossLoss : grossWin > 0 ? Infinity : null;
 
-    const sortedClosed = [...closed].sort(
+    // Calcul de la courbe d'équité en prenant en compte les Trades ET les Transferts
+    const allEvents = [...trades].sort(
       (a, b) => new Date(a.exitDate || a.entryDate) - new Date(b.exitDate || b.entryDate)
     );
+
     let running = startingBalance;
     const curve = [{ date: "Départ", balance: running }];
-    sortedClosed.forEach((t) => {
-      running += t.pnl;
-      curve.push({ date: fmtDate(t.exitDate || t.entryDate), balance: Math.round(running * 100) / 100 });
+
+    allEvents.forEach((item) => {
+      if (item.type === "transfer") {
+        const amt = Number(item.transferAmount || 0);
+        running += item.transferType === "deposit" ? amt : -amt;
+      } else {
+        const pnl = computePnl(item);
+        if (pnl !== null) running += pnl;
+      }
+      curve.push({ date: fmtDate(item.exitDate || item.entryDate), balance: Math.round(running * 100) / 100 });
     });
 
-    const currentBalance = startingBalance + totalPnl;
+    const netTransfers = trades.reduce((acc, t) => {
+      if (t.type === "transfer") {
+        const amt = Number(t.transferAmount || 0);
+        return acc + (t.transferType === "deposit" ? amt : -amt);
+      }
+      return acc;
+    }, 0);
+
+    const currentBalance = startingBalance + totalPnl + netTransfers;
     const pctChange = startingBalance ? (totalPnl / startingBalance) * 100 : 0;
 
     return {
@@ -250,7 +275,7 @@ export default function TradingJournal() {
   const filteredTrades = useMemo(() => {
     let result = [...trades];
     if (filterPair !== "ALL") {
-      result = result.filter(t => t.symbol.toLowerCase().includes(filterPair.toLowerCase()));
+      result = result.filter(t => t.type !== "transfer" && t.symbol.toLowerCase().includes(filterPair.toLowerCase()));
     }
     return result.sort((a, b) => new Date(b.entryDate) - new Date(a.entryDate));
   }, [trades, filterPair]);
@@ -264,9 +289,10 @@ export default function TradingJournal() {
 
   function openEditModal(t) {
     setForm({
-      symbol: t.symbol,
-      direction: t.direction,
-      entryDate: t.entryDate,
+      type: t.type || "trade",
+      symbol: t.symbol || "XAUUSD (Gold)",
+      direction: t.direction || "long",
+      entryDate: t.entryDate || todayISO(),
       entryPrice: t.entryPrice || "",
       exitDate: t.exitDate || "",
       exitPrice: t.exitPrice || "",
@@ -277,6 +303,8 @@ export default function TradingJournal() {
       strategy: t.strategy || "",
       notes: t.notes || "",
       screenshot: t.screenshot || "",
+      transferType: t.transferType || "withdrawal",
+      transferAmount: t.transferAmount || "",
     });
     setEditingId(t.id);
     setModalOpen(true);
@@ -294,17 +322,33 @@ export default function TradingJournal() {
   }
 
   function submitForm() {
-    if (!form.symbol.trim() || !form.entryDate) return;
-    const payload = {
-      ...form,
-      symbol: form.symbol.trim().toUpperCase(),
-      entryPrice: form.entryPrice === "" ? "" : Number(form.entryPrice),
-      exitPrice: form.exitPrice === "" ? "" : Number(form.exitPrice),
-      quantity: form.quantity === "" ? "" : Number(form.quantity),
-      rawPnl: form.rawPnl === "" ? "" : Number(form.rawPnl),
-      rr: form.rr === "" ? "" : Number(form.rr),
-      fees: form.fees === "" ? 0 : Number(form.fees),
-    };
+    if (!form.entryDate) return;
+    
+    let payload = {};
+
+    if (form.type === "transfer") {
+      if (!form.transferAmount || Number(form.transferAmount) <= 0) return;
+      payload = {
+        type: "transfer",
+        entryDate: form.entryDate,
+        transferType: form.transferType,
+        transferAmount: Number(form.transferAmount),
+        notes: form.notes,
+      };
+    } else {
+      if (!form.symbol.trim()) return;
+      payload = {
+        ...form,
+        type: "trade",
+        symbol: form.symbol.trim().toUpperCase(),
+        entryPrice: form.entryPrice === "" ? "" : Number(form.entryPrice),
+        exitPrice: form.exitPrice === "" ? "" : Number(form.exitPrice),
+        quantity: form.quantity === "" ? "" : Number(form.quantity),
+        rawPnl: form.rawPnl === "" ? "" : Number(form.rawPnl),
+        rr: form.rr === "" ? "" : Number(form.rr),
+        fees: form.fees === "" ? 0 : Number(form.fees),
+      };
+    }
 
     if (editingId) {
       setTrades((prev) => prev.map((t) => (t.id === editingId ? { ...t, ...payload } : t)));
@@ -342,7 +386,7 @@ export default function TradingJournal() {
 
   const getDayPnL = (y, m, d) => {
     const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    const dayTrades = trades.filter(t => (t.exitDate || t.entryDate) === dateStr);
+    const dayTrades = trades.filter(t => t.type !== "transfer" && (t.exitDate || t.entryDate) === dateStr);
     if (dayTrades.length === 0) return null;
     return dayTrades.reduce((acc, t) => {
       const pnl = computePnl(t);
@@ -379,7 +423,7 @@ export default function TradingJournal() {
             </div>
           </div>
           <button onClick={openAddModal} style={{ display: "flex", alignItems: "center", gap: 6, background: COLORS.accent, color: "#FFF", border: "none", borderRadius: 6, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-            <Plus size={16} /> Nouveau Trade
+            <Plus size={16} /> Nouveau / Modifier
           </button>
         </div>
 
@@ -437,7 +481,7 @@ export default function TradingJournal() {
               </ResponsiveContainer>
             ) : (
               <div style={{ height: "80%", display: "flex", alignItems: "center", color: COLORS.textFaint, fontSize: 12, border: `1px dashed ${COLORS.borderSoft}`, borderRadius: 6, padding: 12 }}>
-                La courbe se mettra à jour à chaque trade clôturé.
+                La courbe se mettra à jour à chaque trade clôturé ou retrait.
               </div>
             )}
           </div>
@@ -470,19 +514,48 @@ export default function TradingJournal() {
           </div>
 
           {filteredTrades.length === 0 ? (
-            <div style={{ padding: "40px 20px", textAlign: "center", color: COLORS.textMuted, fontSize: 13 }}>Aucun trade enregistré pour ce filtre.</div>
+            <div style={{ padding: "40px 20px", textAlign: "center", color: COLORS.textMuted, fontSize: 13 }}>Aucune transaction enregistrée.</div>
           ) : (
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
                 <thead>
                   <tr style={{ textAlign: "left", color: COLORS.textMuted, fontSize: 11, borderBottom: `1px solid ${COLORS.border}` }}>
-                    {["Date", "Paire", "Sens", "P&L (€)", "R:R", "Setup", "Graphique", "Analyse IA", ""].map((h) => (
+                    {["Date", "Type / Paire", "Sens", "P&L / Montant", "R:R", "Setup / Note", "Graphique", "Statut", ""].map((h) => (
                       <th key={h} style={{ padding: "10px 14px", fontWeight: 500 }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {filteredTrades.map((t) => {
+                    if (t.type === "transfer") {
+                      const isWithdrawal = t.transferType === "withdrawal";
+                      return (
+                        <tr key={t.id} className="row-hover" style={{ borderBottom: `1px solid ${COLORS.borderSoft}`, background: "rgba(255,255,255,0.01)" }}>
+                          <td style={{ padding: "10px 14px", color: COLORS.textMuted, fontFamily: FONT_MONO }}>{fmtDate(t.entryDate)}</td>
+                          <td style={{ padding: "10px 14px", fontWeight: 600, color: "#F0F3FA", display: "flex", alignItems: "center", gap: 6 }}>
+                            {isWithdrawal ? <ArrowUpFromLine size={14} style={{ color: COLORS.warning }} /> : <ArrowDownToLine size={14} style={{ color: COLORS.gain }} />}
+                            {isWithdrawal ? "RETRAIT" : "DÉPÔT"}
+                          </td>
+                          <td style={{ padding: "10px 14px", color: COLORS.textMuted }}>—</td>
+                          <td style={{ padding: "10px 14px", fontFamily: FONT_MONO, fontWeight: 600, color: isWithdrawal ? COLORS.warning : COLORS.gain }}>
+                            {isWithdrawal ? `−${t.transferAmount} €` : `+${t.transferAmount} €`}
+                          </td>
+                          <td style={{ padding: "10px 14px", color: COLORS.textFaint }}>—</td>
+                          <td style={{ padding: "10px 14px", color: COLORS.textMuted }}>{t.notes || "Transfert de capital"}</td>
+                          <td style={{ padding: "10px 14px", color: COLORS.textFaint }}>—</td>
+                          <td style={{ padding: "10px 14px", color: COLORS.textMuted, fontSize: 11 }}>Capital</td>
+                          <td style={{ padding: "10px 14px" }}>
+                            <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                              <button onClick={() => openEditModal(t)} style={{ background: "none", border: "none", color: COLORS.textMuted, cursor: "pointer" }}><Pencil size={13} /></button>
+                              <button onClick={() => deleteTrade(t.id)} style={{ background: "none", border: "none", color: confirmDeleteId === t.id ? COLORS.loss : COLORS.textMuted, cursor: "pointer" }}>
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    }
+
                     const pnl = computePnl(t);
                     const isOpen = pnl === null;
                     const isGoodTrade = pnl !== null && pnl > 0;
@@ -583,53 +656,99 @@ export default function TradingJournal() {
         </div>
       </div>
 
-      {/* Modal Formulaire de Trade */}
+      {/* Modal Formulaire (Trade & Retrait/Dépôt) */}
       {modalOpen && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0, 0, 0, 0.75)", backdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16 }}>
           <div className="tv-card" style={{ width: "100%", maxWidth: 480, padding: 22, boxShadow: "0 10px 30px rgba(0,0,0,0.5)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16, alignItems: "center" }}>
-              <div style={{ fontWeight: 600, fontSize: 15, color: "#F0F3FA" }}>{editingId ? "Modifier le Trade" : "Nouveau Trade"}</div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14, alignItems: "center" }}>
+              <div style={{ fontWeight: 600, fontSize: 15, color: "#F0F3FA" }}>{editingId ? "Modifier l'enregistrement" : "Nouveau Trade / Retrait"}</div>
               <button onClick={() => setModalOpen(false)} style={{ background: "none", border: "none", color: COLORS.textMuted, cursor: "pointer" }}><X size={16} /></button>
             </div>
-            
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <div style={{ display: "flex", gap: 8 }}>
-                <input placeholder="Paire / Actif (ex: XAUUSD, EURUSD)" value={form.symbol} onChange={(e) => setForm({ ...form, symbol: e.target.value })} style={{ flex: 2, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
-                <input type="date" value={form.entryDate} onChange={(e) => setForm({ ...form, entryDate: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 12 }} />
-              </div>
 
-              <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => setForm({ ...form, direction: "long" })} style={{ flex: 1, padding: 8, background: form.direction === "long" ? COLORS.gainSoft : "transparent", color: form.direction === "long" ? COLORS.gain : COLORS.textMuted, border: `1px solid ${form.direction === "long" ? COLORS.gain : COLORS.border}`, borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 12 }}>BUY (ACHAT)</button>
-                <button onClick={() => setForm({ ...form, direction: "short" })} style={{ flex: 1, padding: 8, background: form.direction === "short" ? COLORS.lossSoft : "transparent", color: form.direction === "short" ? COLORS.loss : COLORS.textMuted, border: `1px solid ${form.direction === "short" ? COLORS.loss : COLORS.border}`, borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 12 }}>SELL (VENTE)</button>
-              </div>
-
-              <div style={{ display: "flex", gap: 8 }}>
-                <input type="number" step="any" placeholder="P&L Direct (€) (ex: 250 ou -100)" value={form.rawPnl} onChange={(e) => setForm({ ...form, rawPnl: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
-                <input type="number" step="0.1" placeholder="R:R (ex: 2.0)" value={form.rr} onChange={(e) => setForm({ ...form, rr: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
-              </div>
-
-              <select value={form.strategy} onChange={(e) => setForm({ ...form, strategy: e.target.value })} style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }}>
-                <option value="Liquidity Sweep">Liquidity Sweep</option>
-                <option value="Order Block">Order Block</option>
-                <option value="FVG (Fair Value Gap)">FVG (Fair Value Gap)</option>
-                <option value="Breaker Block">Breaker Block</option>
-              </select>
-
-              <textarea placeholder="Notes / Remarques sur la session..." value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 12 }} />
-
-              {/* Upload Image */}
-              <div style={{ background: COLORS.surfaceAlt, border: `1px dashed ${COLORS.border}`, borderRadius: 4, padding: 10, textAlign: "center" }}>
-                <div style={{ fontSize: 11, color: COLORS.textMuted, marginBottom: 4 }}>Capture d'écran du graphique (TradingView)</div>
-                <input type="file" accept="image/*" onChange={handleImageUpload} style={{ fontSize: 11, color: COLORS.textMuted }} />
-                {form.screenshot && (
-                  <div style={{ marginTop: 6, fontSize: 11, color: COLORS.gain }}>Image chargée avec succès</div>
-                )}
-              </div>
-
-              <button onClick={submitForm} style={{ marginTop: 10, background: COLORS.accent, color: "#fff", border: "none", borderRadius: 4, padding: 10, fontWeight: 600, cursor: "pointer", fontSize: 13 }}>
-                {editingId ? "Enregistrer les modifications" : "Ajouter le trade"}
+            {/* Onglets Trade VS Retrait/Dépôt */}
+            <div style={{ display: "flex", background: COLORS.surfaceAlt, borderRadius: 6, padding: 3, marginBottom: 16 }}>
+              <button
+                onClick={() => setForm({ ...form, type: "trade" })}
+                style={{
+                  flex: 1, padding: "6px 0", border: "none", borderRadius: 4, cursor: "pointer", fontSize: 12, fontWeight: 600,
+                  background: form.type === "trade" ? COLORS.accent : "transparent",
+                  color: form.type === "trade" ? "#FFF" : COLORS.textMuted
+                }}
+              >
+                Trade
+              </button>
+              <button
+                onClick={() => setForm({ ...form, type: "transfer" })}
+                style={{
+                  flex: 1, padding: "6px 0", border: "none", borderRadius: 4, cursor: "pointer", fontSize: 12, fontWeight: 600,
+                  background: form.type === "transfer" ? COLORS.accent : "transparent",
+                  color: form.type === "transfer" ? "#FFF" : COLORS.textMuted
+                }}
+              >
+                Retrait / Dépôt
               </button>
             </div>
+            
+            {form.type === "trade" ? (
+              /* FORMULAIRE TRADE */
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input placeholder="Paire / Actif (ex: XAUUSD, EURUSD)" value={form.symbol} onChange={(e) => setForm({ ...form, symbol: e.target.value })} style={{ flex: 2, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
+                  <input type="date" value={form.entryDate} onChange={(e) => setForm({ ...form, entryDate: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 12 }} />
+                </div>
+
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => setForm({ ...form, direction: "long" })} style={{ flex: 1, padding: 8, background: form.direction === "long" ? COLORS.gainSoft : "transparent", color: form.direction === "long" ? COLORS.gain : COLORS.textMuted, border: `1px solid ${form.direction === "long" ? COLORS.gain : COLORS.border}`, borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 12 }}>BUY (ACHAT)</button>
+                  <button onClick={() => setForm({ ...form, direction: "short" })} style={{ flex: 1, padding: 8, background: form.direction === "short" ? COLORS.lossSoft : "transparent", color: form.direction === "short" ? COLORS.loss : COLORS.textMuted, border: `1px solid ${form.direction === "short" ? COLORS.loss : COLORS.border}`, borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 12 }}>SELL (VENTE)</button>
+                </div>
+
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input type="number" step="any" placeholder="P&L Direct (€) (ex: 250 ou -100)" value={form.rawPnl} onChange={(e) => setForm({ ...form, rawPnl: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
+                  <input type="number" step="0.1" placeholder="R:R (ex: 2.0)" value={form.rr} onChange={(e) => setForm({ ...form, rr: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }} />
+                </div>
+
+                <select value={form.strategy} onChange={(e) => setForm({ ...form, strategy: e.target.value })} style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13 }}>
+                  <option value="Liquidity Sweep">Liquidity Sweep</option>
+                  <option value="Order Block">Order Block</option>
+                  <option value="FVG (Fair Value Gap)">FVG (Fair Value Gap)</option>
+                  <option value="Breaker Block">Breaker Block</option>
+                </select>
+
+                <textarea placeholder="Notes / Remarques sur la session..." value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 12 }} />
+
+                {/* Upload Image */}
+                <div style={{ background: COLORS.surfaceAlt, border: `1px dashed ${COLORS.border}`, borderRadius: 4, padding: 10, textAlign: "center" }}>
+                  <div style={{ fontSize: 11, color: COLORS.textMuted, marginBottom: 4 }}>Capture d'écran du graphique (TradingView)</div>
+                  <input type="file" accept="image/*" onChange={handleImageUpload} style={{ fontSize: 11, color: COLORS.textMuted }} />
+                  {form.screenshot && (
+                    <div style={{ marginTop: 6, fontSize: 11, color: COLORS.gain }}>Image chargée avec succès</div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              /* FORMULAIRE RETRAIT / DÉPÔT */
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => setForm({ ...form, transferType: "withdrawal" })} style={{ flex: 1, padding: 10, background: form.transferType === "withdrawal" ? "rgba(245, 158, 11, 0.15)" : "transparent", color: form.transferType === "withdrawal" ? COLORS.warning : COLORS.textMuted, border: `1px solid ${form.transferType === "withdrawal" ? COLORS.warning : COLORS.border}`, borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                    <ArrowUpFromLine size={14} /> RETRAIT DE CAPITAL
+                  </button>
+                  <button onClick={() => setForm({ ...form, transferType: "deposit" })} style={{ flex: 1, padding: 10, background: form.transferType === "deposit" ? COLORS.gainSoft : "transparent", color: form.transferType === "deposit" ? COLORS.gain : COLORS.textMuted, border: `1px solid ${form.transferType === "deposit" ? COLORS.gain : COLORS.border}`, borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                    <ArrowDownToLine size={14} /> DÉPÔT DE CAPITAL
+                  </button>
+                </div>
+
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input type="number" step="any" placeholder="Montant en (€)" value={form.transferAmount} onChange={(e) => setForm({ ...form, transferAmount: e.target.value })} style={{ flex: 2, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 13, fontFamily: FONT_MONO }} />
+                  <input type="date" value={form.entryDate} onChange={(e) => setForm({ ...form, entryDate: e.target.value })} style={{ flex: 1, background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 12 }} />
+                </div>
+
+                <textarea placeholder="Motif ou note sur le transfert (ex: Paiement Virement Pro, etc.)..." value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} style={{ background: COLORS.surfaceAlt, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 8, color: COLORS.text, fontSize: 12 }} />
+              </div>
+            )}
+
+            <button onClick={submitForm} style={{ marginTop: 14, width: "100%", background: COLORS.accent, color: "#fff", border: "none", borderRadius: 4, padding: 10, fontWeight: 600, cursor: "pointer", fontSize: 13 }}>
+              {editingId ? "Enregistrer les modifications" : "Valider l'opération"}
+            </button>
           </div>
         </div>
       )}
@@ -637,7 +756,7 @@ export default function TradingJournal() {
       {/* Modal Visualisation de Graphique */}
       {selectedImg && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0, 0, 0, 0.85)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60, padding: 20 }}>
-          <div style={{ relative: "relative", maxWidth: "90vw", maxHeight: "90vh" }}>
+          <div style={{ position: "relative", maxWidth: "90vw", maxHeight: "90vh" }}>
             <button onClick={() => setSelectedImg(null)} style={{ position: "absolute", top: -35, right: 0, background: "none", border: "none", color: "#fff", cursor: "pointer" }}>
               <X size={24} />
             </button>
