@@ -1,208 +1,198 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
-export default function TradingJournal() {
-  const [activeTab, setActiveTab] = useState('trades'); // 'trades' | 'retraits'
-  const [capitalInitial, setCapitalInitial] = useState(1000); // À adapter selon ton capital
-  
-  // États pour les formulaires
-  const [trades, setTrades] = useState([]);
-  const [retraits, setRetraits] = useState([]);
+export default function App() {
+  const [activeTab, setActiveTab] = useState('trades');
+  const [capitalInitial] = useState(1000);
 
-  // Formulaire Trade
-  const [tradeForm, setTradeForm] = useState({ pair: '', type: 'BUY', resultPnl: '', date: '' });
-  // Formulaire Retrait
+  // Sauvegarde automatique
+  const [trades, setTrades] = useState(() => {
+    const saved = localStorage.getItem('tj_trades');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [retraits, setRetraits] = useState(() => {
+    const saved = localStorage.getItem('tj_retraits');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('tj_trades', JSON.stringify(trades));
+  }, [trades]);
+
+  useEffect(() => {
+    localStorage.setItem('tj_retraits', JSON.stringify(retraits));
+  }, [retraits]);
+
+  // Formulaires
+  const [tradeForm, setTradeForm] = useState({ pair: '', resultPnl: '', date: '' });
   const [retraitForm, setRetraitForm] = useState({ montant: '', date: '', note: '' });
 
-  // Ajouter un Trade
   const handleAddTrade = (e) => {
     e.preventDefault();
     if (!tradeForm.resultPnl || !tradeForm.date) return;
-    setTrades([...trades, { ...tradeForm, id: Date.now(), resultPnl: parseFloat(tradeForm.resultPnl) }]);
-    setTradeForm({ pair: '', type: 'BUY', resultPnl: '', date: '' });
+    setTrades(prev => [...prev, {
+      id: Date.now(),
+      pair: tradeForm.pair || 'TRADE',
+      resultPnl: parseFloat(tradeForm.resultPnl),
+      date: tradeForm.date
+    }]);
+    setTradeForm({ pair: '', resultPnl: '', date: '' });
   };
 
-  // Ajouter un Retrait
   const handleAddRetrait = (e) => {
     e.preventDefault();
     if (!retraitForm.montant || !retraitForm.date) return;
-    setRetraits([...retraits, { ...retraitForm, id: Date.now(), montant: parseFloat(retraitForm.montant) }]);
+    setRetraits(prev => [...prev, {
+      id: Date.now(),
+      montant: parseFloat(retraitForm.montant),
+      date: retraitForm.date,
+      note: retraitForm.note
+    }]);
     setRetraitForm({ montant: '', date: '', note: '' });
   };
 
-  // Calculs financiers globaux
-  const totalPnlTrades = useMemo(() => trades.reduce((acc, t) => acc + t.resultPnl, 0), [trades]);
-  const totalRetraits = useMemo(() => retraits.reduce((acc, r) => acc + r.montant, 0), [retraits]);
+  const deleteTrade = (id) => setTrades(prev => prev.filter(t => t.id !== id));
+  const deleteRetrait = (id) => setRetraits(prev => prev.filter(r => r.id !== id));
+
+  // Calculs
+  const totalPnlTrades = useMemo(() => trades.reduce((acc, t) => acc + (t.resultPnl || 0), 0), [trades]);
+  const totalRetraits = useMemo(() => retraits.reduce((acc, r) => acc + (r.montant || 0), 0), [retraits]);
   const soldeActuel = capitalInitial + totalPnlTrades - totalRetraits;
 
-  // Construction de la courbe d'équité (triée par date)
   const equityData = useMemo(() => {
     const combined = [
-      ...trades.map(t => ({ date: t.date, impact: t.resultPnl, type: 'TRADE' })),
-      ...retraits.map(r => ({ date: r.date, impact: -r.montant, type: 'RETRAIT' }))
+      ...trades.map(t => ({ date: t.date, impact: t.resultPnl })),
+      ...retraits.map(r => ({ date: r.date, impact: -r.montant }))
     ].sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    let currentBalance = capitalInitial;
+    let current = capitalInitial;
     return combined.map(item => {
-      currentBalance += item.impact;
-      return {
-        date: item.date,
-        solde: currentBalance,
-        type: item.type
-      };
+      current += item.impact;
+      return { date: item.date, solde: current };
     });
   }, [trades, retraits, capitalInitial]);
 
+  // Styles Inline de secours
+  const styles = {
+    container: { backgroundColor: '#0f172a', color: '#f8fafc', minHeight: '100vh', padding: '24px', fontFamily: 'sans-serif' },
+    card: { backgroundColor: '#1e293b', borderRadius: '12px', border: '1px solid #334155', padding: '20px', marginBottom: '20px' },
+    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' },
+    metricBox: { backgroundColor: '#0f172a', border: '1px solid #334155', padding: '10px 16px', borderRadius: '8px', textAlign: 'center', minWidth: '120px' },
+    input: { width: '100%', backgroundColor: '#0f172a', border: '1px solid #334155', color: '#fff', padding: '10px', borderRadius: '6px', marginBottom: '12px', boxSizing: 'border-box' },
+    btnPrimary: { width: '100%', backgroundColor: '#10b981', color: '#090d16', fontWeight: 'bold', padding: '10px', borderRadius: '6px', border: 'none', cursor: 'pointer' },
+    btnAmber: { width: '100%', backgroundColor: '#f59e0b', color: '#090d16', fontWeight: 'bold', padding: '10px', borderRadius: '6px', border: 'none', cursor: 'pointer' },
+    tabBtn: (active) => ({
+      padding: '8px 16px', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', marginRight: '8px',
+      backgroundColor: active ? '#10b981' : '#1e293b', color: active ? '#090d16' : '#94a3b8'
+    }),
+    tabBtnAmber: (active) => ({
+      padding: '8px 16px', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer',
+      backgroundColor: active ? '#f59e0b' : '#1e293b', color: active ? '#090d16' : '#94a3b8'
+    }),
+    row: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#0f172a', padding: '12px', borderRadius: '6px', marginBottom: '8px', border: '1px solid #334155' }
+  };
+
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 p-6 font-sans">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <div style={styles.container}>
+      <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
         
-        {/* HEADER / METRICS */}
-        <header className="flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
+        {/* HEADER */}
+        <div style={{ ...styles.card, ...styles.header }}>
           <div>
-            <h1 className="text-2xl font-bold text-emerald-400">Journal de Trading</h1>
-            <p className="text-sm text-slate-400">Suivi des performances et de trésorerie</p>
+            <h1 style={{ margin: 0, color: '#10b981', fontSize: '24px' }}>Journal de Trading</h1>
+            <p style={{ margin: '4px 0 0', color: '#94a3b8', fontSize: '14px' }}>Gestion des trades & retraits</p>
           </div>
           
-          <div className="flex gap-6 text-center">
-            <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
-              <span className="text-xs text-slate-400 block">P&L Trading Net</span>
-              <span className={`text-lg font-bold ${totalPnlTrades >= 0 ? 'text-emerald-400' : 'text-rose-500'}`}>
-                {totalPnlTrades >= 0 ? `+${totalPnlTrades}` : totalPnlTrades} €
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <div style={styles.metricBox}>
+              <span style={{ fontSize: '12px', color: '#94a3b8', display: 'block' }}>P&L Net</span>
+              <span style={{ fontSize: '18px', fontWeight: 'bold', color: totalPnlTrades >= 0 ? '#10b981' : '#f43f5e' }}>
+                {totalPnlTrades >= 0 ? `+${totalPnlTrades.toFixed(2)}` : totalPnlTrades.toFixed(2)} €
               </span>
             </div>
-            
-            <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
-              <span className="text-xs text-slate-400 block">Total Retraits</span>
-              <span className="text-lg font-bold text-amber-400">
-                -{totalRetraits} €
+            <div style={styles.metricBox}>
+              <span style={{ fontSize: '12px', color: '#94a3b8', display: 'block' }}>Retraits</span>
+              <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#f59e0b' }}>
+                -{totalRetraits.toFixed(2)} €
               </span>
             </div>
-
-            <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
-              <span className="text-xs text-slate-400 block">Solde Réel Compte</span>
-              <span className="text-lg font-bold text-white">
-                {soldeActuel} €
+            <div style={styles.metricBox}>
+              <span style={{ fontSize: '12px', color: '#94a3b8', display: 'block' }}>Solde Réel</span>
+              <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#fff' }}>
+                {soldeActuel.toFixed(2)} €
               </span>
             </div>
           </div>
-        </header>
+        </div>
 
-        {/* ONGLETS NAVIGATION */}
-        <div className="flex gap-2 border-b border-slate-700 pb-2">
-          <button
-            onClick={() => setActiveTab('trades')}
-            className={`px-4 py-2 rounded-lg font-medium transition ${
-              activeTab === 'trades' ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-            }`}
-          >
-            📊 Trades
+        {/* ONGLETS */}
+        <div style={{ marginBottom: '16px' }}>
+          <button style={styles.tabBtn(activeTab === 'trades')} onClick={() => setActiveTab('trades')}>
+            📊 Trades ({trades.length})
           </button>
-          <button
-            onClick={() => setActiveTab('retraits')}
-            className={`px-4 py-2 rounded-lg font-medium transition ${
-              activeTab === 'retraits' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-            }`}
-          >
+          <button style={styles.tabBtnAmber(activeTab === 'retraits')} onClick={() => setActiveTab('retraits')}>
             💸 Retraits ({retraits.length})
           </button>
         </div>
 
         {/* CONTENU ONGLETS */}
         {activeTab === 'trades' ? (
-          /* FORMULAIRE & LISTE TRADES */
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <form onSubmit={handleAddTrade} className="bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-4">
-              <h2 className="font-semibold text-slate-200">Nouveau Trade</h2>
-              <input
-                type="text"
-                placeholder="Paire (ex: EURUSD, GOLD)"
-                value={tradeForm.pair}
-                onChange={e => setTradeForm({...tradeForm, pair: e.target.value})}
-                className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-white"
-              />
-              <input
-                type="number"
-                step="any"
-                placeholder="Gain / Perte (€)"
-                value={tradeForm.resultPnl}
-                onChange={e => setTradeForm({...tradeForm, resultPnl: e.target.value})}
-                className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-white"
-              />
-              <input
-                type="date"
-                value={tradeForm.date}
-                onChange={e => setTradeForm({...tradeForm, date: e.target.value})}
-                className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-white"
-              />
-              <button type="submit" className="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-2 rounded transition">
-                Enregistrer Trade
-              </button>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '16px' }}>
+            <form onSubmit={handleAddTrade} style={styles.card}>
+              <h3 style={{ marginTop: 0, color: '#f8fafc' }}>Nouveau Trade</h3>
+              <input style={styles.input} type="text" placeholder="Paire (ex: GOLD, EURUSD)" value={tradeForm.pair} onChange={e => setTradeForm({...tradeForm, pair: e.target.value})} />
+              <input style={styles.input} type="number" step="any" placeholder="Gain ou Perte (€)" value={tradeForm.resultPnl} onChange={e => setTradeForm({...tradeForm, resultPnl: e.target.value})} />
+              <input style={styles.input} type="date" value={tradeForm.date} onChange={e => setTradeForm({...tradeForm, date: e.target.value})} />
+              <button style={styles.btnPrimary} type="submit">Ajouter Trade</button>
             </form>
 
-            <div className="md:col-span-2 bg-slate-800 p-4 rounded-xl border border-slate-700">
-              <h2 className="font-semibold mb-4 text-slate-200">Historique des Trades</h2>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {trades.length === 0 && <p className="text-slate-500 text-sm">Aucun trade enregistré.</p>}
+            <div style={styles.card}>
+              <h3 style={{ marginTop: 0, color: '#f8fafc' }}>Historique Trades</h3>
+              <div style={{ maxHeight: '250px', overflowY: 'auto' }}>
+                {trades.length === 0 && <p style={{ color: '#64748b', fontSize: '14px' }}>Aucun trade enregistré.</p>}
                 {trades.map(t => (
-                  <div key={t.id} className="flex justify-between items-center bg-slate-900 p-3 rounded border border-slate-700/50">
+                  <div key={t.id} style={styles.row}>
                     <div>
-                      <span className="font-bold text-white mr-2">{t.pair}</span>
-                      <span className="text-xs text-slate-400">{t.date}</span>
+                      <strong style={{ color: '#fff', marginRight: '8px' }}>{t.pair}</strong>
+                      <span style={{ color: '#64748b', fontSize: '12px' }}>{t.date}</span>
                     </div>
-                    <span className={`font-mono font-bold ${t.resultPnl >= 0 ? 'text-emerald-400' : 'text-rose-500'}`}>
-                      {t.resultPnl >= 0 ? `+${t.resultPnl}` : t.resultPnl} €
-                    </span>
+                    <div>
+                      <span style={{ fontWeight: 'bold', marginRight: '12px', color: t.resultPnl >= 0 ? '#10b981' : '#f43f5e' }}>
+                        {t.resultPnl >= 0 ? `+${t.resultPnl}` : t.resultPnl} €
+                      </span>
+                      <button onClick={() => deleteTrade(t.id)} style={{ background: 'none', border: 'none', color: '#f43f5e', cursor: 'pointer' }}>✕</button>
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
           </div>
         ) : (
-          /* FORMULAIRE & LISTE RETRAITS */
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <form onSubmit={handleAddRetrait} className="bg-slate-800 p-4 rounded-xl border border-amber-500/30 space-y-4">
-              <h2 className="font-semibold text-amber-400">Nouveau Retrait</h2>
-              <input
-                type="number"
-                step="any"
-                placeholder="Montant du retrait (€)"
-                value={retraitForm.montant}
-                onChange={e => setRetraitForm({...retraitForm, montant: e.target.value})}
-                className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-white"
-              />
-              <input
-                type="date"
-                value={retraitForm.date}
-                onChange={e => setRetraitForm({...retraitForm, date: e.target.value})}
-                className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-white"
-              />
-              <input
-                type="text"
-                placeholder="Note / Banque (Optionnel)"
-                value={retraitForm.note}
-                onChange={e => setRetraitForm({...retraitForm, note: e.target.value})}
-                className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-white"
-              />
-              <button type="submit" className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-2 rounded transition">
-                Valider le Retrait
-              </button>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '16px' }}>
+            <form onSubmit={handleAddRetrait} style={styles.card}>
+              <h3 style={{ marginTop: 0, color: '#f59e0b' }}>Nouveau Retrait</h3>
+              <input style={styles.input} type="number" step="any" placeholder="Montant (€)" value={retraitForm.montant} onChange={e => setRetraitForm({...retraitForm, montant: e.target.value})} />
+              <input style={styles.input} type="date" value={retraitForm.date} onChange={e => setRetraitForm({...retraitForm, date: e.target.value})} />
+              <input style={styles.input} type="text" placeholder="Note (Optionnel)" value={retraitForm.note} onChange={e => setRetraitForm({...retraitForm, note: e.target.value})} />
+              <button style={styles.btnAmber} type="submit">Valider Retrait</button>
             </form>
 
-            <div className="md:col-span-2 bg-slate-800 p-4 rounded-xl border border-slate-700">
-              <h2 className="font-semibold mb-4 text-slate-200">Historique des Retraits</h2>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {retraits.length === 0 && <p className="text-slate-500 text-sm">Aucun retrait effectué.</p>}
+            <div style={styles.card}>
+              <h3 style={{ marginTop: 0, color: '#f8fafc' }}>Historique Retraits</h3>
+              <div style={{ maxHeight: '250px', overflowY: 'auto' }}>
+                {retraits.length === 0 && <p style={{ color: '#64748b', fontSize: '14px' }}>Aucun retrait effectué.</p>}
                 {retraits.map(r => (
-                  <div key={r.id} className="flex justify-between items-center bg-slate-900 p-3 rounded border border-amber-500/20">
+                  <div key={r.id} style={{ ...styles.row, borderColor: '#f59e0b33' }}>
                     <div>
-                      <span className="font-bold text-amber-400 mr-2">Retrait</span>
-                      {r.note && <span className="text-xs text-slate-400 mr-2">({r.note})</span>}
-                      <span className="text-xs text-slate-500">{r.date}</span>
+                      <strong style={{ color: '#f59e0b', marginRight: '8px' }}>Retrait</strong>
+                      {r.note && <span style={{ color: '#94a3b8', fontSize: '12px', marginRight: '8px' }}>({r.note})</span>}
+                      <span style={{ color: '#64748b', fontSize: '12px' }}>{r.date}</span>
                     </div>
-                    <span className="font-mono font-bold text-amber-400">
-                      -{r.montant} €
-                    </span>
+                    <div>
+                      <span style={{ fontWeight: 'bold', marginRight: '12px', color: '#f59e0b' }}>-{r.montant} €</span>
+                      <button onClick={() => deleteRetrait(r.id)} style={{ background: 'none', border: 'none', color: '#f43f5e', cursor: 'pointer' }}>✕</button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -210,12 +200,12 @@ export default function TradingJournal() {
           </div>
         )}
 
-        {/* COURBE D'ÉQUITÉ (AVEC TRADES ET RETRAITS INTEGRÉS) */}
-        <div className="bg-slate-800 p-6 rounded-xl border border-slate-700">
-          <h2 className="font-semibold mb-4 text-slate-200">Évolution du Solde Réel</h2>
-          <div className="h-64 w-full">
+        {/* GRAPHIQUE */}
+        <div style={styles.card}>
+          <h3 style={{ marginTop: 0, color: '#f8fafc' }}>Évolution du Solde Réel</h3>
+          <div style={{ height: '220px', width: '100%' }}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={equityData}>
+              <LineChart data={equityData.length > 0 ? equityData : [{ date: 'Initial', solde: capitalInitial }]}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                 <XAxis dataKey="date" stroke="#94a3b8" />
                 <YAxis stroke="#94a3b8" />
