@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import {
   Plus, X, Trash2, Pencil, TrendingUp, TrendingDown,
   Wallet, Target, Percent, ArrowUpRight, ArrowDownRight, ChevronRight, Image as ImageIcon,
-  Bot, Sparkles, CheckCircle2, AlertTriangle, Calendar, Filter
+  Bot, Sparkles, CheckCircle2, AlertTriangle, Calendar, Filter, ChevronLeft
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer
@@ -22,7 +22,7 @@ if (typeof window !== "undefined" && !window.storage) {
   };
 }
 
-// Couleurs Style TradingView Dark Theme
+// Couleurs Style TradingView Dark Theme Ultra Épuré
 const COLORS = {
   bg: "#131722",
   surface: "#1E222D",
@@ -35,9 +35,11 @@ const COLORS = {
   accent: "#2962FF",
   accentSoft: "rgba(41, 98, 255, 0.15)",
   gain: "#089981",
-  gainSoft: "rgba(8, 153, 129, 0.15)",
+  gainSoft: "rgba(8, 153, 129, 0.12)",
+  gainBorder: "rgba(8, 153, 129, 0.35)",
   loss: "#F23645",
-  lossSoft: "rgba(242, 54, 69, 0.15)",
+  lossSoft: "rgba(242, 54, 69, 0.12)",
+  lossBorder: "rgba(242, 54, 69, 0.35)",
 };
 
 const FONT_BODY = "-apple-system, BlinkMacSystemFont, 'Trebuchet MS', Roboto, Ubuntu, sans-serif";
@@ -50,7 +52,7 @@ const monthsList = [
   'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
   'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
 ];
-const weekdays = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+const weekdays = ['LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM', 'DIM'];
 
 function fmtMoney(n, opts = {}) {
   if (n === null || n === undefined || Number.isNaN(n)) return "—";
@@ -130,7 +132,7 @@ export default function TradingJournal() {
           setBalanceDraft(String(parsed.startingBalance ?? 10000));
         }
       } catch (e) {
-      } finally {
+      } font-size: 12,finally {
         setLoaded(true);
       }
     })();
@@ -323,20 +325,41 @@ export default function TradingJournal() {
     setCalendarDate(d);
   };
 
-  const getDayPnL = (y, m, d) => {
+  const getDayData = (y, m, d) => {
     const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const dayTrades = trades.filter(t => (t.exitDate || t.entryDate) === dateStr);
     if (dayTrades.length === 0) return null;
-    return dayTrades.reduce((acc, t) => {
-      const pnl = computePnl(t);
-      return acc + (pnl !== null ? pnl : 0);
+    const pnl = dayTrades.reduce((acc, t) => {
+      const p = computePnl(t);
+      return acc + (p !== null ? p : 0);
     }, 0);
+    return { pnl, count: dayTrades.length };
   };
+
+  const monthStats = useMemo(() => {
+    const totalDays = new Date(cYear, cMonth + 1, 0).getDate();
+    let pnlSum = 0;
+    let winDays = 0;
+    let lossDays = 0;
+    let tradeCount = 0;
+
+    for (let d = 1; d <= totalDays; d++) {
+      const data = getDayData(cYear, cMonth, d);
+      if (data) {
+        pnlSum += data.pnl;
+        tradeCount += data.count;
+        if (data.pnl > 0) winDays++;
+        else if (data.pnl < 0) lossDays++;
+      }
+    }
+    return { pnlSum, winDays, lossDays, tradeCount };
+  }, [cYear, cMonth, trades]);
 
   if (!loaded) return null;
 
   const positive = stats.totalPnl >= 0;
   const lineColor = positive ? COLORS.gain : COLORS.loss;
+  const todayStr = todayISO();
 
   return (
     <div style={{ background: COLORS.bg, color: COLORS.text, fontFamily: FONT_BODY, minHeight: "100vh", padding: "20px 24px 60px" }}>
@@ -347,8 +370,23 @@ export default function TradingJournal() {
         input:focus, textarea:focus, select:focus { outline: none; border-color: ${COLORS.accent} !important; }
         .row-hover:hover { background: ${COLORS.surfaceAlt}; }
         .tv-card { background: ${COLORS.surface}; border: 1px solid ${COLORS.border}; border-radius: 8px; }
-        .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 10px; }
-        .cal-cell { background: ${COLORS.bg}; border: 1px solid ${COLORS.borderSoft}; border-radius: 6px; min-height: 65px; padding: 6px; display: flex; flex-direction: column; justify-content: space-between; }
+        
+        .cal-clean-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+        .cal-clean-cell {
+          background: rgba(255, 255, 255, 0.015);
+          border: 1px solid ${COLORS.borderSoft};
+          border-radius: 6px;
+          aspect-ratio: 1.1;
+          padding: 6px 8px;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          transition: all 0.15s ease;
+        }
+        .cal-clean-cell:hover {
+          border-color: ${COLORS.border};
+          background: rgba(255, 255, 255, 0.03);
+        }
       `}</style>
 
       <div style={{ maxWidth: 1200, margin: "0 auto" }}>
@@ -436,6 +474,91 @@ export default function TradingJournal() {
           <StatCard icon={<ChevronRight size={14} />} label="En Cours" value={stats.openCount} />
         </div>
 
+        {/* Calendrier Trading Épuré & Moderne */}
+        <div className="tv-card" style={{ padding: "20px 22px", marginBottom: 20 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, flexWrap: "wrap", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#F0F3FA", display: "flex", alignItems: "center", gap: 8 }}>
+                <Calendar size={16} style={{ color: COLORS.accent }} />
+                {monthsList[cMonth]} {cYear}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, borderLeft: `1px solid ${COLORS.border}`, paddingLeft: 14 }}>
+                <span style={{ color: monthStats.pnlSum >= 0 ? COLORS.gain : COLORS.loss, fontWeight: 700, fontFamily: FONT_MONO }}>
+                  {fmtMoney(monthStats.pnlSum)}
+                </span>
+                <span style={{ color: COLORS.textFaint }}>•</span>
+                <span style={{ color: COLORS.textMuted, fontSize: 11 }}>
+                  <strong style={{ color: COLORS.gain }}>{monthStats.winDays}G</strong> - <strong style={{ color: COLORS.loss }}>{monthStats.lossDays}P</strong>
+                </span>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <button onClick={() => changeMonth(-1)} style={{ background: COLORS.surfaceAlt, color: COLORS.text, border: `1px solid ${COLORS.border}`, borderRadius: 6, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                <ChevronLeft size={14} />
+              </button>
+              <button onClick={() => setCalendarDate(new Date())} style={{ background: COLORS.surfaceAlt, color: COLORS.text, border: `1px solid ${COLORS.border}`, borderRadius: 6, padding: "0 10px", height: 28, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                Aujourd'hui
+              </button>
+              <button onClick={() => changeMonth(1)} style={{ background: COLORS.surfaceAlt, color: COLORS.text, border: `1px solid ${COLORS.border}`, borderRadius: 6, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6, marginBottom: 8, textAlign: "center" }}>
+            {weekdays.map(w => (
+              <div key={w} style={{ fontSize: 10, fontWeight: 700, color: COLORS.textFaint, letterSpacing: "0.08em" }}>{w}</div>
+            ))}
+          </div>
+
+          <div className="cal-clean-grid">
+            {(() => {
+              const firstIdx = new Date(cYear, cMonth, 1).getDay();
+              const offset = (firstIdx === 0 ? 6 : firstIdx - 1);
+              const totalDays = new Date(cYear, cMonth + 1, 0).getDate();
+              const cells = [];
+
+              for (let i = 0; i < offset; i++) {
+                cells.push(<div key={`empty-${i}`} style={{ opacity: 0.2 }} />);
+              }
+
+              for (let d = 1; d <= totalDays; d++) {
+                const dateStr = `${cYear}-${String(cMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                const data = getDayData(cYear, cMonth, d);
+                const isToday = dateStr === todayStr;
+                const hasPnl = data !== null;
+                const isWin = hasPnl && data.pnl > 0;
+                const isLoss = hasPnl && data.pnl < 0;
+
+                const bg = isWin ? COLORS.gainSoft : isLoss ? COLORS.lossSoft : "transparent";
+                const border = isToday ? COLORS.accent : isWin ? COLORS.gainBorder : isLoss ? COLORS.lossBorder : COLORS.borderSoft;
+
+                cells.push(
+                  <div key={`day-${d}`} className="cal-clean-cell" style={{ background: bg, borderColor: border }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: 11, fontWeight: isToday ? "700" : "500", color: isToday ? COLORS.accent : COLORS.textMuted }}>{d}</span>
+                      {hasPnl && (
+                        <span style={{ fontSize: 9, color: COLORS.textFaint, fontWeight: 600 }}>{data.count}T</span>
+                      )}
+                    </div>
+                    <div>
+                      {hasPnl ? (
+                        <div style={{ fontSize: 11, fontWeight: 700, fontFamily: FONT_MONO, color: isWin ? COLORS.gain : isLoss ? COLORS.loss : COLORS.textMuted }}>
+                          {data.pnl > 0 ? `+${Math.round(data.pnl)}€` : `${Math.round(data.pnl)}€`}
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 10, color: COLORS.textFaint }}>—</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              }
+              return cells;
+            })()}
+          </div>
+        </div>
+
         {/* Tableau Historique */}
         <div className="tv-card" style={{ overflow: "hidden", marginBottom: 20 }}>
           <div style={{ padding: "14px 18px", borderBottom: `1px solid ${COLORS.border}`, fontSize: 13, fontWeight: 600, color: "#F0F3FA", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -520,49 +643,6 @@ export default function TradingJournal() {
               </table>
             </div>
           )}
-        </div>
-
-        {/* Calendrier Trading des Gains / Pertes */}
-        <div className="tv-card" style={{ padding: "18px 20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 15 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#F0F3FA", display: "flex", alignItems: "center", gap: 8 }}>
-              <Calendar size={15} style={{ color: COLORS.accent }} /> Calendrier Trading ({monthsList[cMonth]} {cYear})
-            </div>
-            <div style={{ display: "flex", gap: 6 }}>
-              <button onClick={() => changeMonth(-1)} style={{ background: COLORS.surfaceAlt, color: COLORS.text, border: `1px solid ${COLORS.border}`, padding: "4px 10px", borderRadius: 4, cursor: "pointer", fontSize: 12 }}>&lt;</button>
-              <button onClick={() => setCalendarDate(new Date())} style={{ background: COLORS.surfaceAlt, color: COLORS.text, border: `1px solid ${COLORS.border}`, padding: "4px 10px", borderRadius: 4, cursor: "pointer", fontSize: 12 }}>Aujourd'hui</button>
-              <button onClick={() => changeMonth(1)} style={{ background: COLORS.surfaceAlt, color: COLORS.text, border: `1px solid ${COLORS.border}`, padding: "4px 10px", borderRadius: 4, cursor: "pointer", fontSize: 12 }}>&gt;</button>
-            </div>
-          </div>
-
-          <div className="cal-grid">
-            {weekdays.map(w => <div key={w} style={{ textAlign: "center", fontSize: 11, color: COLORS.textMuted, fontWeight: 600 }}>{w}</div>)}
-            {(() => {
-              const firstIdx = new Date(cYear, cMonth, 1).getDay();
-              const offset = (firstIdx === 0 ? 6 : firstIdx - 1);
-              const totalDays = new Date(cYear, cMonth + 1, 0).getDate();
-              const cells = [];
-
-              for (let i = 0; i < offset; i++) cells.push(<div key={`e-${i}`} />);
-
-              for (let d = 1; d <= totalDays; d++) {
-                const pnlVal = getDayPnL(cYear, cMonth, d);
-                cells.push(
-                  <div key={`d-${d}`} className="cal-cell">
-                    <span style={{ fontSize: 11, fontWeight: "bold", color: COLORS.textMuted }}>{d}</span>
-                    {pnlVal !== null ? (
-                      <span style={{ fontSize: 11, fontWeight: "bold", color: pnlVal >= 0 ? COLORS.gain : COLORS.loss, background: pnlVal >= 0 ? COLORS.gainSoft : COLORS.lossSoft, padding: "2px 4px", borderRadius: 4, textAlign: "center" }}>
-                        {pnlVal >= 0 ? `+${pnlVal.toFixed(0)}€` : `${pnlVal.toFixed(0)}€`}
-                      </span>
-                    ) : (
-                      <span style={{ fontSize: 10, color: COLORS.textFaint }}>—</span>
-                    )}
-                  </div>
-                );
-              }
-              return cells;
-            })()}
-          </div>
         </div>
       </div>
 
