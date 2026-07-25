@@ -1,10 +1,40 @@
 import React, { useState, useEffect } from 'react';
 
-// --- DONNÉES PAR DÉFAUT ---
+// --- DONNÉES DE DÉPART (Exemples) ---
 const initialTrades = [
   {
     id: 1,
-    date: '2026-07-25',
+    date: '2026-07-20',
+    pair: 'XAUUSD (Gold)',
+    type: 'BUY',
+    entry: 2370.00,
+    exit: 2380.00,
+    lot: 0.5,
+    pnl: 500,
+    result: 'WIN',
+    rr: 2.0,
+    setup: 'Liquidity Sweep',
+    notes: 'Achat sur balayage des plus bas de la session asiatique.',
+    image: 'https://via.placeholder.com/600x300/1e293b/38bdf8?text=Trade+Gold'
+  },
+  {
+    id: 2,
+    date: '2026-07-22',
+    pair: 'EURUSD',
+    type: 'SELL',
+    entry: 1.0880,
+    exit: 1.0895,
+    lot: 1.0,
+    pnl: -150,
+    result: 'LOSS',
+    rr: -1,
+    setup: 'Breaker Block',
+    notes: 'Entrée prématurée sans confirmation du bias Higher Timeframe.',
+    image: ''
+  },
+  {
+    id: 3,
+    date: '2026-07-24',
     pair: 'XAUUSD (Gold)',
     type: 'BUY',
     entry: 2380.50,
@@ -14,27 +44,27 @@ const initialTrades = [
     result: 'WIN',
     rr: 2.5,
     setup: 'Liquidity Sweep + FVG',
-    notes: 'Exécution propre sur la session NY.',
+    notes: 'Exécution propre sur le créneau de New York.',
     image: ''
   },
   {
-    id: 2,
-    date: '2026-07-24',
-    pair: 'EURUSD',
+    id: 4,
+    date: '2026-07-25',
+    pair: 'GBPUSD',
     type: 'SELL',
-    entry: 1.0850,
-    exit: 1.0875,
-    lot: 1.0,
-    pnl: -250,
-    result: 'LOSS',
-    rr: -1,
-    setup: 'Breaker Block',
-    notes: 'Entrée prématurée.',
+    entry: 1.2910,
+    exit: 1.2880,
+    lot: 0.8,
+    pnl: 240,
+    result: 'WIN',
+    rr: 2.0,
+    setup: 'Order Block',
+    notes: 'Rejet propre sur le bloc de commande 15m.',
     image: ''
   }
 ];
 
-const months = [
+const monthsList = [
   'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
   'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
 ];
@@ -47,9 +77,9 @@ function getIAReport(date) {
   const y = date.getFullYear();
   const hash = (y * 365) + (m * 31) + d;
 
-  const score = 75 + (hash % 24);
-  const prod = Math.min(98, score - 2);
-  const windows = ['Matin (08h-12h)', 'Après-midi (14h-17h)', 'Début de soirée (18h-20h)'];
+  const score = 70 + (hash % 29);
+  const prod = Math.min(99, score + 1);
+  const windows = ['Matin (08h-12h)', 'Après-midi (14h-17h)', 'Soirée (18h-20h)'];
   const windowStr = windows[hash % windows.length];
 
   return {
@@ -58,26 +88,26 @@ function getIAReport(date) {
     focus: score > 88 ? 'Excellente' : 'Modérée',
     window: windowStr,
     timeline: [
-      { time: 'Matinée', text: d % 2 === 0 ? 'Forte capacité d\'analyse et de décision. Priorisez le travail de fond.' : 'Review globale et organisation des priorités.' },
-      { time: 'Après-midi', text: d % 3 === 0 ? 'Créneau stratégique d\'exécution. Résolution de problèmes complexes.' : 'Gestion des flux de travail courants et échanges clés.' },
-      { time: 'Soirée', text: 'Analyse des résultats de la journée et préparation de la session suivante.' }
+      { time: 'Matinée', text: d % 2 === 0 ? 'Forte volatilité attendue. Priorisez les configurations A+.' : 'Review globale et prépa de la watchlist.' },
+      { time: 'Après-midi', text: d % 3 === 0 ? 'Créneau idéal pour NY. Attention aux annonces économiques.' : 'Gestion rigoureuse du risque et des trailing stops.' },
+      { time: 'Soirée', text: 'Débriefing de la journée et mise à jour du journal.' }
     ],
     recommendation: d % 2 === 0
-      ? `Journée particulièrement favorable avec un score de ${score}/100. Maximisez votre engagement sur le créneau du ${windowStr}.`
-      : `Journée d'équilibre. Maintenez une approche méthodique et évitez la dispersion d'énergie.`
+      ? `Conditions de marché optimales (Score : ${score}/100). Focus recommandé sur ${windowStr}.`
+      : `Marché indécis. Privilégiez un risque réduit (0.5% max) et évitez l'overtrading.`
   };
 }
 
 export default function App() {
   // --- ÉTATS DU JOURNAL ---
   const [trades, setTrades] = useState(() => {
-    const saved = localStorage.getItem('rm_trading_journal_data');
+    const saved = localStorage.getItem('rm_tv_journal_data');
     return saved ? JSON.parse(saved) : initialTrades;
   });
 
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
-    pair: 'XAUUSD',
+    pair: 'XAUUSD (Gold)',
     type: 'BUY',
     entry: '',
     exit: '',
@@ -92,12 +122,12 @@ export default function App() {
   const [filterPair, setFilterPair] = useState('ALL');
 
   // --- ÉTATS DU CALENDRIER ---
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [currentPhase, setCurrentPhase] = useState('month'); // 'day', 'month', 'year'
+  const [calendarDate, setCalendarDate] = useState(new Date());
+  const [calendarPhase, setCalendarPhase] = useState('month'); // 'day', 'month', 'year'
 
   // Sauvegarde automatique
   useEffect(() => {
-    localStorage.setItem('rm_trading_journal_data', JSON.stringify(trades));
+    localStorage.setItem('rm_tv_journal_data', JSON.stringify(trades));
   }, [trades]);
 
   // --- STATISTIQUES GLOBALES ---
@@ -106,6 +136,14 @@ export default function App() {
   const losses = trades.filter(t => t.pnl < 0).length;
   const winRate = totalTrades > 0 ? ((wins / totalTrades) * 100).toFixed(1) : 0;
   const netPnL = trades.reduce((acc, t) => acc + (parseFloat(t.pnl) || 0), 0);
+
+  // --- CALCUL DE LA COURBE D'ÉQUITÉ (PROGRESSION) ---
+  const sortedTradesForChart = [...trades].sort((a, b) => new Date(a.date) - new Date(b.date));
+  let cumulativePnL = 0;
+  const equityPoints = sortedTradesForChart.map((t) => {
+    cumulativePnL += parseFloat(t.pnl) || 0;
+    return { date: t.date, pnl: t.pnl, total: cumulativePnL, pair: t.pair };
+  });
 
   // --- HANDLERS FORMULAIRE ---
   const handleInputChange = (e) => {
@@ -132,7 +170,7 @@ export default function App() {
     setTrades([newTrade, ...trades]);
     setFormData({
       date: new Date().toISOString().split('T')[0],
-      pair: 'XAUUSD',
+      pair: 'XAUUSD (Gold)',
       type: 'BUY',
       entry: '',
       exit: '',
@@ -151,236 +189,266 @@ export default function App() {
     }
   };
 
-  // --- NAVIGATION CALENDRIER ---
-  const navigate = (direction) => {
-    const newDate = new Date(currentDate);
-    if (currentPhase === 'day') newDate.setDate(newDate.getDate() + direction);
-    else if (currentPhase === 'month') newDate.setMonth(newDate.getMonth() + direction);
-    else if (currentPhase === 'year') newDate.setFullYear(newDate.getFullYear() + direction);
-    setCurrentDate(newDate);
+  // --- HANDLERS CALENDRIER ---
+  const navigateCalendar = (direction) => {
+    const d = new Date(calendarDate);
+    if (calendarPhase === 'day') d.setDate(d.getDate() + direction);
+    else if (calendarPhase === 'month') d.setMonth(d.getMonth() + direction);
+    else if (calendarPhase === 'year') d.setFullYear(d.getFullYear() + direction);
+    setCalendarDate(d);
   };
 
-  const year = currentDate.getFullYear();
-  const month = currentDate.getMonth();
-  const day = currentDate.getDate();
-  const monthName = months[month];
-  const iaReport = getIAReport(currentDate);
+  const cYear = calendarDate.getFullYear();
+  const cMonth = calendarDate.getMonth();
+  const cDay = calendarDate.getDate();
+  const monthName = monthsList[cMonth];
+  const iaReport = getIAReport(calendarDate);
 
-  const getHeaderTitle = () => {
-    if (currentPhase === 'day') return `${day} ${monthName} ${year}`;
-    if (currentPhase === 'month') return `${monthName} ${year}`;
-    return `${year}`;
+  const getCalendarTitle = () => {
+    if (calendarPhase === 'day') return `${cDay} ${monthName} ${cYear}`;
+    if (calendarPhase === 'month') return `${monthName} ${cYear}`;
+    return `${cYear}`;
   };
 
-  // Calcule le PnL cumulé pour une date précise (YYYY-MM-DD)
-  const getDayPnL = (year, month, day) => {
-    const formattedDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const getDayPnL = (y, m, d) => {
+    const formattedDate = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const dayTrades = trades.filter(t => t.date === formattedDate);
     if (dayTrades.length === 0) return null;
     return dayTrades.reduce((acc, t) => acc + (parseFloat(t.pnl) || 0), 0);
   };
 
-  // Formater les trades de la date courante pour la vue Jour
-  const currentDateFormatted = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const currentDateFormatted = `${cYear}-${String(cMonth + 1).padStart(2, '0')}-${String(cDay).padStart(2, '0')}`;
   const tradesForCurrentDate = trades.filter(t => t.date === currentDateFormatted);
 
   const filteredTrades = filterPair === 'ALL' 
     ? trades 
     : trades.filter(t => t.pair.toLowerCase().includes(filterPair.toLowerCase()));
 
-  // --- RENDU DU CALENDRIER ---
-  const renderMonthGrid = () => {
-    const firstDayIdx = new Date(year, month, 1).getDay();
-    const startOffset = (firstDayIdx === 0 ? 6 : firstDayIdx - 1);
-    const totalDays = new Date(year, month + 1, 0).getDate();
-    const today = new Date();
-
-    const cells = [];
-
-    weekdays.forEach((d) => {
-      cells.push(<div key={`lbl-${d}`} className="weekday-label">{d}</div>);
-    });
-
-    for (let i = 0; i < startOffset; i++) {
-      cells.push(<div key={`empty-${i}`} className="calendar-day-cell empty" />);
+  // --- COMPOSANT GRAPHIQUE (SVG EQUITY CURVE) ---
+  const renderEquityChart = () => {
+    if (equityPoints.length === 0) {
+      return <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '40px 0' }}>Aucune donnée de trade pour afficher la courbe.</div>;
     }
 
-    for (let d = 1; d <= totalDays; d++) {
-      const isToday = today.getDate() === d && today.getMonth() === month && today.getFullYear() === year;
-      const isSelected = currentDate.getDate() === d && currentDate.getMonth() === month && currentDate.getFullYear() === year;
-      const dayDate = new Date(year, month, d);
-      const ia = getIAReport(dayDate);
-      const dayPnL = getDayPnL(year, month, d);
+    const width = 800;
+    const height = 220;
+    const padding = 40;
 
-      let classNames = "calendar-day-cell";
-      if (isToday) classNames += " today";
-      else if (isSelected) classNames += " selected";
+    const values = equityPoints.map(p => p.total);
+    const minVal = Math.min(0, ...values);
+    const maxVal = Math.max(100, ...values);
 
-      cells.push(
-        <div
-          key={`day-${d}`}
-          className={classNames}
-          onClick={() => setCurrentDate(new Date(year, month, d))}
-          onDoubleClick={() => {
-            setCurrentDate(new Date(year, month, d));
-            setCurrentPhase('day');
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span className="day-num">{d}</span>
-            <span className={`day-ia-badge ${ia.score >= 88 ? 'badge-high' : 'badge-mid'}`}>
-              IA {ia.score}%
-            </span>
-          </div>
+    const getX = (idx) => {
+      if (equityPoints.length === 1) return width / 2;
+      return padding + (idx / (equityPoints.length - 1)) * (width - padding * 2);
+    };
 
-          {/* AFFICHAGE DES RÉSULTATS DE TRADING SUR LE CALENDRIER */}
-          {dayPnL !== null ? (
-            <div className={`trading-result-badge ${dayPnL >= 0 ? 'pnl-win' : 'pnl-loss'}`}>
-              {dayPnL >= 0 ? `+${dayPnL}$` : `${dayPnL}$`}
-            </div>
-          ) : (
-            <div className="cell-hint">Pas de trade</div>
-          )}
-        </div>
-      );
-    }
+    const getY = (val) => {
+      const range = maxVal - minVal || 1;
+      return height - padding - ((val - minVal) / range) * (height - padding * 2);
+    };
 
-    return cells;
+    const zeroY = getY(0);
+
+    const pointsPath = equityPoints.map((p, i) => `${getX(i)},${getY(p.total)}`).join(' L ');
+    const areaPath = `M ${getX(0)},${zeroY} L ${pointsPath} L ${getX(equityPoints.length - 1)},${zeroY} Z`;
+
+    const isPositiveOverall = netPnL >= 0;
+    const lineColor = isPositiveOverall ? '#22c55e' : '#ef4444';
+    const gradientId = isPositiveOverall ? 'greenGrad' : 'redGrad';
+
+    return (
+      <div style={{ width: '100%', overflowX: 'auto' }}>
+        <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: 'auto', minWidth: '500px' }}>
+          <defs>
+            <linearGradient id="greenGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#22c55e" stopOpacity="0.35" />
+              <stop offset="100%" stopColor="#22c55e" stopOpacity="0.0" />
+            </linearGradient>
+            <linearGradient id="redGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#ef4444" stopOpacity="0.35" />
+              <stop offset="100%" stopColor="#ef4444" stopOpacity="0.0" />
+            </linearGradient>
+          </defs>
+
+          {/* Ligne 0 PnL */}
+          <line x1={padding} y1={zeroY} x2={width - padding} y2={zeroY} stroke="#2a364f" strokeDasharray="4 4" strokeWidth="1" />
+
+          {/* Remplissage en dégradé sous la courbe */}
+          <path d={areaPath} fill={`url(#${gradientId})`} />
+
+          {/* Courbe principale */}
+          <path d={`M ${pointsPath}`} fill="none" stroke={lineColor} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+
+          {/* Points cliquables avec PnL */}
+          {equityPoints.map((p, i) => {
+            const cx = getX(i);
+            const cy = getY(p.total);
+            return (
+              <g key={i} className="chart-point-group">
+                <circle cx={cx} cy={cy} r="5" fill={lineColor} stroke="#0b0f19" strokeWidth="2" />
+                <title>{`${p.date} (${p.pair}): ${p.pnl >= 0 ? '+' : ''}${p.pnl}$ | Total: ${p.total.toFixed(2)}$`}</title>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    );
   };
 
   return (
-    <div className="app-container">
+    <div className="app-viewport">
       <style>{`
         :root {
-          --bg-body: #f1f5f9;
-          --card-bg: #ffffff;
-          --primary: #2563eb;
-          --primary-hover: #1d4ed8;
-          --primary-soft: #eff6ff;
-          --accent: #7c3aed;
-          --text-main: #0f172a;
-          --text-muted: #64748b;
-          --border: #e2e8f0;
-          --success: #10b981;
-          --success-bg: #ecfdf5;
-          --danger: #ef4444;
-          --danger-bg: #fef2f2;
-          --radius: 16px;
+          --bg-main: #0b0f19;
+          --bg-card: #151c2c;
+          --bg-card-hover: #1e293b;
+          --border: #2a364f;
+          --primary: #38bdf8;
+          --primary-glow: rgba(56, 189, 248, 0.15);
+          --accent: #818cf8;
+          --green: #22c55e;
+          --green-bg: rgba(34, 197, 94, 0.12);
+          --red: #ef4444;
+          --red-bg: rgba(239, 68, 68, 0.12);
+          --text: #f8fafc;
+          --text-muted: #94a3b8;
+          --radius: 12px;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background-color: var(--bg-body); color: var(--text-main); font-family: system-ui, -apple-system, sans-serif; padding: 20px; }
-        .app-container { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+        body { background-color: var(--bg-main); color: var(--text); font-family: 'Inter', system-ui, -apple-system, sans-serif; padding: 20px; }
+        .app-viewport { max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
 
-        /* DASHBOARD CARDS */
-        .card { background: var(--card-bg); border-radius: var(--radius); padding: 24px; box-shadow: 0 10px 30px -5px rgba(0,0,0,0.05); border: 1px solid var(--border); }
-        .header-title { font-size: 1.8rem; font-weight: 800; color: var(--primary); }
+        /* HEADER */
+        .app-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 16px; }
+        .app-title { font-size: 1.8rem; font-weight: 800; background: linear-gradient(90deg, var(--primary), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 
-        .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
-        .kpi-box { background: #f8fafc; border: 1px solid var(--border); padding: 16px; border-radius: 12px; }
-        .kpi-title { font-size: 0.8rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; }
-        .kpi-val { font-size: 1.6rem; font-weight: 800; margin-top: 4px; }
+        /* KPI METRICS */
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+        .kpi-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+        .kpi-label { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; font-weight: 700; }
+        .kpi-value { font-size: 1.8rem; font-weight: 800; }
+        .kpi-value.green { color: var(--green); }
+        .kpi-value.red { color: var(--red); }
 
-        /* MAIN GRID */
-        .main-grid { display: grid; grid-template-columns: 340px 1fr; gap: 24px; }
-        @media(max-width: 900px) { .main-grid { grid-template-columns: 1fr; } }
+        /* GRAPH CARD */
+        .graph-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+
+        /* MAIN CONTENT LAYOUT */
+        .main-layout { display: grid; grid-template-columns: 360px 1fr; gap: 24px; }
+        @media (max-width: 960px) { .main-layout { grid-template-columns: 1fr; } }
 
         /* FORM */
+        .form-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; height: fit-content; }
+        .section-title { font-size: 1.1rem; font-weight: 800; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; color: var(--primary); }
         .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
-        .form-group label { font-size: 0.8rem; font-weight: 700; color: var(--text-muted); }
-        .form-group input, .form-group select, .form-group textarea { padding: 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.9rem; outline: none; }
-        .form-group input:focus, .form-group select:focus { border-color: var(--primary); }
+        .form-group label { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; }
+        .form-group input, .form-group select, .form-group textarea {
+          background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 10px; color: var(--text); font-size: 0.9rem; outline: none;
+        }
+        .form-group input:focus, .form-group select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-glow); }
         .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .btn-primary { background: var(--primary); color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 700; cursor: pointer; width: 100%; }
-        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-submit { background: var(--primary); color: #000; font-weight: 800; padding: 12px; border: none; border-radius: 8px; cursor: pointer; width: 100%; margin-top: 6px; }
+        .btn-submit:hover { opacity: 0.9; }
 
         /* TABLE */
-        .table-wrapper { overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; text-align: left; }
-        th { background: #f8fafc; padding: 12px; border-bottom: 2px solid var(--border); color: var(--text-muted); font-size: 0.8rem; }
-        td { padding: 12px; border-bottom: 1px solid var(--border); }
+        .content-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+        .table-filter-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+        .trade-table-wrapper { overflow-x: auto; }
+        .trade-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.88rem; }
+        .trade-table th { background: #0f172a; padding: 12px; color: var(--text-muted); border-bottom: 1px solid var(--border); font-size: 0.78rem; font-weight: 700; }
+        .trade-table td { padding: 12px; border-bottom: 1px solid var(--border); }
+        .trade-table tr:hover { background: var(--bg-card-hover); }
 
-        /* CALENDRIER CLASSIQUE */
-        .tabs-header { display: flex; background: #f8fafc; padding: 6px; border-radius: 12px; border: 1px solid var(--border); gap: 8px; }
-        .tab-btn { flex: 1; padding: 10px; border: none; background: transparent; color: var(--text-muted); font-weight: 700; border-radius: 8px; cursor: pointer; }
-        .tab-btn.active { background: #ffffff; color: var(--primary); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .badge { padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 800; text-align: center; display: inline-block; }
+        .badge-buy { background: rgba(56, 189, 248, 0.15); color: var(--primary); }
+        .badge-sell { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
 
-        .top-bar { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 16px; margin-top: 12px; }
-        .btn-action { background: #fff; border: 1px solid var(--border); padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; }
-        .btn-action:hover { background: var(--primary-soft); color: var(--primary); }
+        /* CALENDRIER TRADINGVIEW INTEGRÉ */
+        .calendar-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+        .cal-nav { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 14px; }
+        .cal-tabs { display: flex; gap: 6px; background: #0f172a; padding: 4px; border-radius: 8px; border: 1px solid var(--border); }
+        .cal-tab-btn { background: transparent; border: none; color: var(--text-muted); padding: 6px 14px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 0.8rem; }
+        .cal-tab-btn.active { background: var(--bg-card); color: var(--primary); }
+        .btn-nav { background: #0f172a; border: 1px solid var(--border); color: var(--text); padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 0.85rem; }
+        .btn-nav:hover { border-color: var(--primary); color: var(--primary); }
 
-        .calendar-month-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; margin-top: 16px; }
-        .weekday-label { text-align: center; font-weight: 700; font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; }
-        .calendar-day-cell { background: #f8fafc; border: 2px solid transparent; border-radius: 12px; min-height: 95px; padding: 8px; cursor: pointer; display: flex; flex-direction: column; justify-content: space-between; transition: all 0.2s; }
-        .calendar-day-cell:hover:not(.empty) { background: #fff; border-color: var(--primary); transform: translateY(-2px); box-shadow: 0 8px 20px rgba(37,99,235,0.1); }
-        .calendar-day-cell.empty { background: transparent; border: none; cursor: default; }
-        .calendar-day-cell.selected { border-color: var(--primary); background: var(--primary-soft); }
-        .calendar-day-cell.today { border-color: var(--primary); font-weight: bold; }
+        /* CALENDAR MONTH GRID */
+        .month-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; }
+        .cal-weekday { text-align: center; color: var(--text-muted); font-size: 0.8rem; font-weight: 700; padding-bottom: 6px; }
+        .cal-day-cell { background: #0f172a; border: 1px solid var(--border); border-radius: 10px; min-height: 95px; padding: 8px; cursor: pointer; display: flex; flex-direction: column; justify-content: space-between; transition: all 0.2s; }
+        .cal-day-cell:hover:not(.empty) { border-color: var(--primary); transform: translateY(-2px); }
+        .cal-day-cell.today { border-color: var(--primary); background: var(--primary-glow); }
+        .cal-day-cell.selected { border-color: var(--accent); }
+        .cal-day-num { font-weight: 800; font-size: 1rem; }
+        .cal-ia-tag { font-size: 0.65rem; font-weight: 700; padding: 2px 6px; border-radius: 10px; background: rgba(129, 140, 248, 0.15); color: var(--accent); }
+
+        /* TRADING BADGES IN CALENDAR */
+        .pnl-badge-cal { padding: 4px 6px; border-radius: 6px; font-weight: 800; font-size: 0.78rem; text-align: center; margin-top: 4px; }
+        .pnl-badge-win { background: var(--green-bg); color: var(--green); border: 1px solid rgba(34, 197, 94, 0.3); }
+        .pnl-badge-loss { background: var(--red-bg); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.3); }
+
+        /* DAY VUE DETAIL */
+        .day-view-container { display: grid; grid-template-columns: 240px 1fr; gap: 20px; }
+        .day-hero-card { background: linear-gradient(135deg, rgba(56, 189, 248, 0.1), rgba(129, 140, 248, 0.1)); border: 1px solid var(--primary); border-radius: var(--radius); padding: 24px; text-align: center; }
+        .day-hero-num { font-size: 4.5rem; font-weight: 900; color: var(--primary); line-height: 1; }
         
-        .day-num { font-size: 1.1rem; font-weight: 800; }
-        .day-ia-badge { font-size: 0.65rem; font-weight: 700; padding: 2px 6px; border-radius: 12px; }
-        .badge-high { background: #dcfce7; color: #15803d; }
-        .badge-mid { background: #fef3c7; color: #b45309; }
-        .cell-hint { font-size: 0.65rem; color: var(--text-muted); }
+        .ia-report-box { background: #0f172a; border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+        .ia-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .ia-metric-card { background: var(--bg-card); border: 1px solid var(--border); padding: 10px; border-radius: 8px; text-align: center; }
 
-        /* BADGES TRADING DANS CALENDRIER */
-        .trading-result-badge { margin-top: 4px; padding: 4px 6px; border-radius: 6px; font-weight: 800; font-size: 0.8rem; text-align: center; }
-        .pnl-win { background: var(--success-bg); color: var(--success); border: 1px solid #a7f3d0; }
-        .pnl-loss { background: var(--danger-bg); color: var(--danger); border: 1px solid #fecaca; }
-
-        /* VUE JOUR DETAILED */
-        .full-day-container { display: grid; grid-template-columns: 260px 1fr; gap: 20px; }
-        .big-day-card { background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border: 1px solid #bfdbfe; border-radius: var(--radius); padding: 24px; text-align: center; }
-        .big-day-number { font-size: 5rem; font-weight: 900; color: var(--primary); line-height: 1; }
-
-        .metrics-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-        .metric-card { background: #f8fafc; border: 1px solid var(--border); padding: 10px; border-radius: 8px; text-align: center; }
-        
-        .year-grid-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-        .year-month-box { background: #f8fafc; border-radius: 12px; padding: 12px; cursor: pointer; border: 1px solid var(--border); }
-        .year-month-box:hover { border-color: var(--primary); background: #fff; }
+        /* VUE ANNÉE */
+        .year-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+        .year-month-card { background: #0f172a; border: 1px solid var(--border); border-radius: 10px; padding: 12px; cursor: pointer; }
+        .year-month-card:hover { border-color: var(--primary); }
+        .mini-calendar { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; font-size: 0.65rem; text-align: center; margin-top: 8px; }
       `}</style>
 
-      {/* HEADER PRINCIPAL */}
-      <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h1 className="header-title">RM TRADING JOURNAL</h1>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Suivi d'activité & Analyse de performance</p>
-          </div>
-          <button className="btn-action" onClick={() => localStorage.clear() || setTrades([])}>Réinitialiser</button>
+      {/* HEADER */}
+      <header className="app-header">
+        <div>
+          <h1 className="app-title">RM TRADING JOURNAL</h1>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Interface Pro TradingView • Suivi d'Équité & Calendrier IA</p>
         </div>
-      </div>
+        <button className="btn-nav" onClick={() => localStorage.clear() || setTrades([])}>Réinitialiser</button>
+      </header>
 
-      {/* KPI METRICS */}
-      <div className="kpi-row">
-        <div className="kpi-box">
-          <div className="kpi-title">P&L Net Total</div>
-          <div className="kpi-val" style={{ color: netPnL >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+      {/* STATISTIQUES KPI */}
+      <section className="kpi-grid">
+        <div className="kpi-card">
+          <div className="kpi-label">P&L Net Total</div>
+          <div className={`kpi-value ${netPnL >= 0 ? 'green' : 'red'}`}>
             {netPnL >= 0 ? `+${netPnL.toFixed(2)}$` : `${netPnL.toFixed(2)}$`}
           </div>
         </div>
-        <div className="kpi-box">
-          <div className="kpi-title">Win Rate</div>
-          <div className="kpi-val" style={{ color: 'var(--primary)' }}>{winRate}%</div>
+        <div className="kpi-card">
+          <div className="kpi-label">Win Rate</div>
+          <div className="kpi-value green">{winRate}%</div>
         </div>
-        <div className="kpi-box">
-          <div className="kpi-title">Total Trades</div>
-          <div className="kpi-val">{totalTrades}</div>
+        <div className="kpi-card">
+          <div className="kpi-label">Total Trades</div>
+          <div className="kpi-value">{totalTrades}</div>
         </div>
-        <div className="kpi-box">
-          <div className="kpi-title">Victoires / Défaites</div>
-          <div className="kpi-val">
-            <span style={{ color: 'var(--success)' }}>{wins}W</span> / <span style={{ color: 'var(--danger)' }}>{losses}L</span>
+        <div className="kpi-card">
+          <div className="kpi-label">Gains / Pertes</div>
+          <div className="kpi-value">
+            <span style={{ color: 'var(--green)' }}>{wins}W</span> / <span style={{ color: 'var(--red)' }}>{losses}L</span>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* FORMULAIRE + HISTORIQUE */}
-      <div className="main-grid">
+      {/* COURBE DE PROGRESSION / EQUITY CURVE */}
+      <section className="graph-card">
+        <div className="section-title">📈 Courbe de Progression du Capital (Equity Curve)</div>
+        {renderEquityChart()}
+      </section>
+
+      {/* FORMULAIRE & HISTORIQUE */}
+      <main className="main-layout">
         {/* FORMULAIRE */}
-        <div className="card">
-          <h2 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: 14 }}>✍️ Enregistrer un Trade</h2>
+        <div className="form-card">
+          <div className="section-title">✍️ Saisir un Trade</div>
           <form onSubmit={handleAddTrade}>
             <div className="form-row">
               <div className="form-group">
@@ -409,11 +477,11 @@ export default function App() {
 
             <div className="form-row">
               <div className="form-group">
-                <label>P&L ($ Gains/Pertes)</label>
-                <input type="number" step="any" name="pnl" value={formData.pnl} onChange={handleInputChange} placeholder="725 ou -250" required />
+                <label>P&L ($)</label>
+                <input type="number" step="any" name="pnl" value={formData.pnl} onChange={handleInputChange} placeholder="725 ou -150" required />
               </div>
               <div className="form-group">
-                <label>Ratio R:R</label>
+                <label>R:R</label>
                 <input type="number" step="0.1" name="rr" value={formData.rr} onChange={handleInputChange} placeholder="2.5" />
               </div>
             </div>
@@ -428,27 +496,37 @@ export default function App() {
             </div>
 
             <div className="form-group">
-              <label>Observations</label>
-              <textarea name="notes" rows="2" value={formData.notes} onChange={handleInputChange} placeholder="Commentaires du trade..." />
+              <label>Lien Capture (TradeZou/Imgur)</label>
+              <input type="url" name="image" value={formData.image} onChange={handleInputChange} placeholder="https://..." />
             </div>
 
-            <button type="submit" className="btn-primary">Ajouter au Journal</button>
+            <div className="form-group">
+              <label>Observations</label>
+              <textarea name="notes" rows="2" value={formData.notes} onChange={handleInputChange} placeholder="Incertitudes, psychologie..." />
+            </div>
+
+            <button type="submit" className="btn-submit">Ajouter au Journal</button>
           </form>
         </div>
 
         {/* HISTORIQUE */}
-        <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-            <h2 style={{ fontSize: '1.1rem', fontWeight: 800 }}>📊 Historique des Trades</h2>
-            <select value={filterPair} onChange={(e) => setFilterPair(e.target.value)} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)' }}>
+        <div className="content-card">
+          <div className="table-filter-bar">
+            <div className="section-title" style={{ marginBottom: 0 }}>📊 Journal des Trades</div>
+            <select 
+              value={filterPair} 
+              onChange={(e) => setFilterPair(e.target.value)}
+              style={{ background: '#0f172a', color: '#fff', border: '1px solid var(--border)', padding: '6px 12px', borderRadius: 6 }}
+            >
               <option value="ALL">Toutes les paires</option>
               <option value="XAUUSD">Gold (XAUUSD)</option>
               <option value="EURUSD">EURUSD</option>
+              <option value="GBPUSD">GBPUSD</option>
             </select>
           </div>
 
-          <div className="table-wrapper">
-            <table>
+          <div className="trade-table-wrapper">
+            <table className="trade-table">
               <thead>
                 <tr>
                   <th>Date</th>
@@ -457,31 +535,35 @@ export default function App() {
                   <th>R:R</th>
                   <th>P&L ($)</th>
                   <th>Setup</th>
+                  <th>Graphique</th>
                   <th>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredTrades.length === 0 ? (
                   <tr>
-                    <td colSpan="7" style={{ textAlignment: 'center', color: 'var(--text-muted)' }}>Aucun trade enregistré.</td>
+                    <td colSpan="8" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 20 }}>
+                      Aucun trade enregistré.
+                    </td>
                   </tr>
                 ) : (
                   filteredTrades.map((t) => (
                     <tr key={t.id}>
                       <td>{t.date}</td>
                       <td style={{ fontWeight: 700 }}>{t.pair}</td>
-                      <td>
-                        <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 700, background: t.type === 'BUY' ? '#eff6ff' : '#fff7ed', color: t.type === 'BUY' ? 'var(--primary)' : '#c2410c' }}>
-                          {t.type}
-                        </span>
-                      </td>
+                      <td><span className={`badge ${t.type === 'BUY' ? 'badge-buy' : 'badge-sell'}`}>{t.type}</span></td>
                       <td>1:{t.rr}</td>
-                      <td style={{ fontWeight: 800, color: t.pnl >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                      <td style={{ fontWeight: 800, color: t.pnl >= 0 ? 'var(--green)' : 'var(--red)' }}>
                         {t.pnl >= 0 ? `+${t.pnl}$` : `${t.pnl}$`}
                       </td>
                       <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{t.setup}</td>
                       <td>
-                        <button onClick={() => handleDeleteTrade(t.id)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontWeight: 'bold' }}>✕</button>
+                        {t.image ? (
+                          <a href={t.image} target="_blank" rel="noreferrer" style={{ color: 'var(--primary)', textDecoration: 'none' }}>Voir</a>
+                        ) : '-'}
+                      </td>
+                      <td>
+                        <button onClick={() => handleDeleteTrade(t.id)} style={{ background: 'transparent', border: 'none', color: 'var(--red)', cursor: 'pointer', fontWeight: 'bold' }}>✕</button>
                       </td>
                     </tr>
                   ))
@@ -490,57 +572,101 @@ export default function App() {
             </table>
           </div>
         </div>
-      </div>
+      </main>
 
-      {/* SECTION CALENDRIER DE TRADING INTEGRÉ */}
-      <div className="card">
-        {/* Onglets */}
-        <nav className="tabs-header">
-          <button className={`tab-btn ${currentPhase === 'day' ? 'active' : ''}`} onClick={() => setCurrentPhase('day')}>Vue Jour</button>
-          <button className={`tab-btn ${currentPhase === 'month' ? 'active' : ''}`} onClick={() => setCurrentPhase('month')}>Vue Mois</button>
-          <button className={`tab-btn ${currentPhase === 'year' ? 'active' : ''}`} onClick={() => setCurrentPhase('year')}>Vue Année</button>
-        </nav>
+      {/* CALENDRIER TRADING DU BAS DE PAGE */}
+      <section className="calendar-section">
+        <div className="cal-nav">
+          <div>
+            <div className="section-title" style={{ marginBottom: 4 }}>📅 Calendrier de Trading & Assistant IA</div>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{getCalendarTitle()}</p>
+          </div>
 
-        {/* Barre d'en-tête Nav */}
-        <div className="top-bar">
-          <h2 style={{ fontSize: '1.4rem', fontWeight: 800, textTransform: 'capitalize' }}>{getHeaderTitle()}</h2>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn-action" onClick={() => navigate(-1)}>&lt; Précédent</button>
-            <button className="btn-action" onClick={() => setCurrentDate(new Date())}>Aujourd'hui</button>
-            <button className="btn-action" onClick={() => navigate(1)}>Suivant &gt;</button>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <div className="cal-tabs">
+              <button className={`cal-tab-btn ${calendarPhase === 'day' ? 'active' : ''}`} onClick={() => setCalendarPhase('day')}>Jour</button>
+              <button className={`cal-tab-btn ${calendarPhase === 'month' ? 'active' : ''}`} onClick={() => setCalendarPhase('month')}>Mois</button>
+              <button className={`cal-tab-btn ${calendarPhase === 'year' ? 'active' : ''}`} onClick={() => setCalendarPhase('year')}>Année</button>
+            </div>
+            <div>
+              <button className="btn-nav" onClick={() => navigateCalendar(-1)}>&lt;</button>
+              <button className="btn-nav" onClick={() => setCalendarDate(new Date())} style={{ margin: '0 4px' }}>Aujourd'hui</button>
+              <button className="btn-nav" onClick={() => navigateCalendar(1)}>&gt;</button>
+            </div>
           </div>
         </div>
 
         {/* VUE MOIS */}
-        {currentPhase === 'month' && (
-          <div className="calendar-month-grid">
-            {renderMonthGrid()}
+        {calendarPhase === 'month' && (
+          <div className="month-grid">
+            {weekdays.map(w => <div key={w} className="cal-weekday">{w}</div>)}
+            {(() => {
+              const firstDayIdx = new Date(cYear, cMonth, 1).getDay();
+              const startOffset = (firstDayIdx === 0 ? 6 : firstDayIdx - 1);
+              const totalDays = new Date(cYear, cMonth + 1, 0).getDate();
+              const today = new Date();
+              const cells = [];
+
+              for (let i = 0; i < startOffset; i++) {
+                cells.push(<div key={`emp-${i}`} className="cal-day-cell empty" style={{ background: 'transparent', border: 'none' }} />);
+              }
+
+              for (let d = 1; d <= totalDays; d++) {
+                const isToday = today.getDate() === d && today.getMonth() === cMonth && today.getFullYear() === cYear;
+                const isSelected = calendarDate.getDate() === d && calendarDate.getMonth() === cMonth && calendarDate.getFullYear() === cYear;
+                const dayDate = new Date(cYear, cMonth, d);
+                const ia = getIAReport(dayDate);
+                const dayPnL = getDayPnL(cYear, cMonth, d);
+
+                cells.push(
+                  <div
+                    key={`d-${d}`}
+                    className={`cal-day-cell ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''}`}
+                    onClick={() => setCalendarDate(new Date(cYear, cMonth, d))}
+                    onDoubleClick={() => { setCalendarDate(new Date(cYear, cMonth, d)); setCalendarPhase('day'); }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span className="cal-day-num">{d}</span>
+                      <span className="cal-ia-tag">IA {ia.score}%</span>
+                    </div>
+
+                    {/* AFFICHAGE DES TRADES REGISTRÉS SUR LE CALENDRIER */}
+                    {dayPnL !== null ? (
+                      <div className={`pnl-badge-cal ${dayPnL >= 0 ? 'pnl-badge-win' : 'pnl-badge-loss'}`}>
+                        {dayPnL >= 0 ? `+${dayPnL}$` : `${dayPnL}$`}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Pas de trade</div>
+                    )}
+                  </div>
+                );
+              }
+              return cells;
+            })()}
           </div>
         )}
 
         {/* VUE JOUR */}
-        {currentPhase === 'day' && (
-          <div className="full-day-container" style={{ marginTop: 16 }}>
-            <div className="big-day-card">
-              <div style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--primary)', letterSpacing: 1 }}>JOURNÉE DU</div>
-              <div className="big-day-number">{day}</div>
-              <div style={{ fontSize: '1rem', fontWeight: 700, textTransform: 'capitalize' }}>
-                {currentDate.toLocaleDateString('fr-FR', { weekday: 'long', month: 'long', year: 'numeric' })}
-              </div>
+        {calendarPhase === 'day' && (
+          <div className="day-view-container">
+            <div className="day-hero-card">
+              <div style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--primary)' }}>SESSION DU JOUR</div>
+              <div className="day-hero-num">{cDay}</div>
+              <div style={{ fontWeight: 700, fontSize: '0.9rem', marginTop: 8 }}>{monthName} {cYear}</div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {/* RÉSULTATS DU TRADING CE JOUR */}
-              <div style={{ background: '#f8fafc', padding: 16, borderRadius: 12, border: '1px solid var(--border)' }}>
-                <h3 style={{ fontSize: '1rem', fontWeight: 800, marginBottom: 8 }}>📊 Trades enregistrés pour cette date</h3>
+            <div className="ia-report-box">
+              {/* HISTORIQUE DE LA JOURNÉE DANS LA VUE JOUR */}
+              <div style={{ background: 'var(--bg-card)', padding: 12, borderRadius: 8, border: '1px solid var(--border)' }}>
+                <span style={{ fontWeight: 800, color: 'var(--primary)', fontSize: '0.9rem' }}>📊 Trades exécutés pour ce jour :</span>
                 {tradesForCurrentDate.length === 0 ? (
-                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Aucun trade enregistré pour ce jour-là.</p>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 4 }}>Aucun trade enregistré pour cette date.</p>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
                     {tradesForCurrentDate.map(t => (
-                      <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: '#fff', borderRadius: 8, border: '1px solid var(--border)' }}>
-                        <span style={{ fontWeight: 700 }}>{t.pair} ({t.type})</span>
-                        <span style={{ fontWeight: 800, color: t.pnl >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                      <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', background: '#0f172a', borderRadius: 6, fontSize: '0.85rem' }}>
+                        <span><strong>{t.pair}</strong> ({t.type}) - {t.setup}</span>
+                        <span style={{ fontWeight: 800, color: t.pnl >= 0 ? 'var(--green)' : 'var(--red)' }}>
                           {t.pnl >= 0 ? `+${t.pnl}$` : `${t.pnl}$`}
                         </span>
                       </div>
@@ -549,50 +675,50 @@ export default function App() {
                 )}
               </div>
 
-              {/* ANLYSE IA */}
-              <div style={{ background: '#f8fafc', padding: 16, borderRadius: 12, border: '1px solid var(--border)' }}>
-                <div style={{ fontWeight: 800, color: 'var(--accent)', marginBottom: 8 }}>✨ Rapport & Clarté d'esprit IA</div>
-                <div className="metrics-row" style={{ marginBottom: 12 }}>
-                  <div className="metric-card">
-                    <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--primary)' }}>{iaReport.productivity}</div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Productivité</div>
-                  </div>
-                  <div className="metric-card">
-                    <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--primary)' }}>{iaReport.focus}</div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Focus</div>
-                  </div>
-                  <div className="metric-card">
-                    <div style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--accent)' }}>{iaReport.window}</div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Fenêtre clé</div>
-                  </div>
-                </div>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-main)', lineHeight: 1.4 }}>
-                  💡 {iaReport.recommendation}
-                </p>
+              {/* RAPPORT PRÉDICTIF IA */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontWeight: 800, color: 'var(--accent)' }}>✨ Rapport de session IA</span>
+                <span className="cal-ia-tag" style={{ fontSize: '0.75rem', padding: '4px 8px' }}>Probabilité Succès : {iaReport.score}%</span>
               </div>
+
+              <div className="ia-metrics">
+                <div className="ia-metric-card">
+                  <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--primary)' }}>{iaReport.productivity}</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Volatilité IA</div>
+                </div>
+                <div className="ia-metric-card">
+                  <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--primary)' }}>{iaReport.focus}</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Qualité Setups</div>
+                </div>
+                <div className="ia-metric-card">
+                  <div style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--accent)' }}>{iaReport.window}</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Créneau Favorable</div>
+                </div>
+              </div>
+
+              <p style={{ fontSize: '0.85rem', lineHeight: 1.4, background: 'var(--bg-card)', padding: 10, borderRadius: 8, borderLeft: '3px solid var(--accent)' }}>
+                💡 <strong>Conseil IA :</strong> {iaReport.recommendation}
+              </p>
             </div>
           </div>
         )}
 
         {/* VUE ANNÉE */}
-        {currentPhase === 'year' && (
-          <div className="year-grid-container" style={{ marginTop: 16 }}>
-            {months.map((mName, mIdx) => {
-              const daysInM = new Date(year, mIdx + 1, 0).getDate();
-              return (
-                <div key={mName} className="year-month-box" onClick={() => { setCurrentDate(new Date(year, mIdx, 1)); setCurrentPhase('month'); }}>
-                  <div style={{ fontWeight: 800, color: 'var(--primary)', textAlign: 'center', marginBottom: 8 }}>{mName}</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, fontSize: '0.65rem', textAlign: 'center' }}>
-                    {Array.from({ length: daysInM }, (_, i) => i + 1).map((d) => (
-                      <div key={d} style={{ color: 'var(--text-muted)' }}>{d}</div>
-                    ))}
-                  </div>
+        {calendarPhase === 'year' && (
+          <div className="year-grid">
+            {monthsList.map((m, idx) => (
+              <div key={m} className="year-month-card" onClick={() => { setCalendarDate(new Date(cYear, idx, 1)); setCalendarPhase('month'); }}>
+                <div style={{ fontWeight: 800, color: 'var(--primary)', textAlign: 'center' }}>{m}</div>
+                <div className="mini-calendar">
+                  {Array.from({ length: new Date(cYear, idx + 1, 0).getDate() }, (_, i) => i + 1).map(day => (
+                    <div key={day} style={{ color: 'var(--text-muted)' }}>{day}</div>
+                  ))}
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }
