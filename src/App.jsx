@@ -6,7 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 // =========================================================================
 const SUPABASE_URL = "https://rvxfnfddtgjxspyihzbq.supabase.co";
 // Remplace le texte ci-dessous par ta clé publiable (qui commence par sb_publishable_...)
-const SUPABASE_ANON_KEY = "TA_CLE_PUBLIABLE_ICI";
+const SUPABASE_ANON_KEY = "sb_publishable_TCwIr7C0LvztrmbuxMm9Zg_3B_1X96U";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
