@@ -1,33 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createClient } from '@supabase/supabase-js';
 
 // =========================================================================
-// 1. CONFIGURATION SUPABASE (Intégration directe sans crash Vercel)
+// CONFIGURATION SUPABASE
 // =========================================================================
-const SUPABASE_URL = "https://rvxfnfddtgjxspyihzbq.supabase.co"; // Ton URL Supabase
-const SUPABASE_ANON_KEY = "sb_publishable_TCwIr7C0LvztrmbuxMm9Zg_3B_1X96U"; // Ligne 11: Ta clé sb_publishable_...
+const SUPABASE_URL = "https://rvxfnfddtgjxspyihzbq.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_TCwIr7C0LvztrmbuxMm9Zg_3B_1X96U";
 
-// Client Supabase léger pour le Web
-const supabaseRequest = async (endpoint, method = 'GET', body = null) => {
-  if (!SUPABASE_URL || SUPABASE_URL.includes("https://rvxfnfddtgjxspyihzbq.supabase.co")) return null;
-  try {
-    const options = {
-      method,
-      headers: {
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'Content-Type': 'application/json',
-        'Prefer': method === 'POST' || method === 'PUT' ? 'return=representation' : 'return=minimal'
-      }
-    };
-    if (body) options.body = JSON.stringify(body);
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${endpoint}`, options);
-    if (!res.ok) return null;
-    return await res.json();
-  } catch (e) {
-    console.error("Erreur Supabase API:", e);
-    return null;
-  }
-};
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -45,6 +25,7 @@ export default function App() {
   const [startingBalance, setStartingBalance] = useState(10000);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedImg, setSelectedImg] = useState(null);
+  const [hideBalance, setHideBalance] = useState(false);
 
   // Formulaire de Trade / Transfert
   const [formType, setFormType] = useState('trade');
@@ -53,27 +34,36 @@ export default function App() {
   const [entryDate, setEntryDate] = useState(todayISO());
   const [rawPnl, setRawPnl] = useState('');
   const [rr, setRr] = useState('');
-  const [strategy, setStrategy] = useState('Liquidity Sweep');
+  const [strategy, setStrategy] = useState('Liquidity Sweep / ICT');
   const [notes, setNotes] = useState('');
   const [screenshot, setScreenshot] = useState('');
   const [transferType, setTransferType] = useState('withdrawal');
   const [transferAmount, setTransferAmount] = useState('');
 
-  // Charger les données (Supabase + Sauvegarde de secours LocalStorage)
+  // Charger les données (Supabase + Fallback LocalStorage)
   useEffect(() => {
     const loadData = async () => {
       setSaving(true);
-      const cloudData = await supabaseRequest('journal_data?id=eq.1&select=content');
-      if (cloudData && cloudData[0] && cloudData[0].content) {
-        setTrades(cloudData[0].content.trades || []);
-        setStartingBalance(cloudData[0].content.startingBalance ?? 10000);
-      } else {
-        const local = localStorage.getItem('rm_trading_journal');
-        if (local) {
-          const parsed = JSON.parse(local);
-          setTrades(parsed.trades || []);
-          setStartingBalance(parsed.startingBalance || 10000);
+      try {
+        const { data, error } = await supabase
+          .from('journal_data')
+          .select('content')
+          .eq('id', 1)
+          .single();
+
+        if (data && data.content) {
+          setTrades(data.content.trades || []);
+          setStartingBalance(data.content.startingBalance ?? 10000);
+        } else {
+          const local = localStorage.getItem('rm_trading_journal');
+          if (local) {
+            const parsed = JSON.parse(local);
+            setTrades(parsed.trades || []);
+            setStartingBalance(parsed.startingBalance || 10000);
+          }
         }
+      } catch (err) {
+        console.error("Erreur de chargement:", err);
       }
       setSaving(false);
       setLoaded(true);
@@ -81,20 +71,26 @@ export default function App() {
     loadData();
   }, []);
 
-  // Sauvegarder automatiquement lors des changements
+  // Sauvegarde automatique
   useEffect(() => {
     if (!loaded) return;
     const saveData = async () => {
       setSaving(true);
       const payload = { startingBalance, trades };
       localStorage.setItem('rm_trading_journal', JSON.stringify(payload));
-      await supabaseRequest('journal_data?id=eq.1', 'POST', { id: 1, content: payload });
+      try {
+        await supabase
+          .from('journal_data')
+          .upsert({ id: 1, content: payload });
+      } catch (err) {
+        console.error("Erreur de sauvegarde:", err);
+      }
       setSaving(false);
     };
     saveData();
   }, [trades, startingBalance, loaded]);
 
-  // Copier-Coller direct d'image TradingView (Ctrl + V)
+  // Capture directe d'image (Ctrl + V / Cmd + V)
   const handlePaste = (e) => {
     const items = e.clipboardData?.items;
     if (!items) return;
@@ -110,7 +106,7 @@ export default function App() {
     }
   };
 
-  // Calculs financiers
+  // Calculs KPIs & Performance
   const stats = useMemo(() => {
     let currentBalance = startingBalance;
     let totalPnl = 0;
@@ -187,15 +183,23 @@ export default function App() {
           <div>
             <h1 style={{ margin: 0, color: '#2962ff', fontSize: '22px' }}>RM Trading Journal</h1>
             <span style={{ fontSize: '12px', color: '#787b86' }}>
-              {saving ? '⏳ Synchronisation...' : '🟢 Connecté au Cloud'}
+              {saving ? '⏳ Synchronisation...' : '🟢 Base Cloud Active'}
             </span>
           </div>
-          <button 
-            onClick={() => setModalOpen(true)}
-            style={{ backgroundColor: '#2962ff', color: '#fff', border: 'none', padding: '10px 18px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
-          >
-            + Enregistrer un Trade
-          </button>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button 
+              onClick={() => setHideBalance(!hideBalance)}
+              style={{ backgroundColor: '#2a2e39', color: '#fff', border: 'none', padding: '10px 14px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}
+            >
+              {hideBalance ? '👁️ Afficher Solde' : '🙈 Masquer Solde'}
+            </button>
+            <button 
+              onClick={() => setModalOpen(true)}
+              style={{ backgroundColor: '#2962ff', color: '#fff', border: 'none', padding: '10px 18px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+            >
+              + Enregistrer un Trade
+            </button>
+          </div>
         </header>
 
         {/* Dashboard Solde & KPIs */}
@@ -203,13 +207,13 @@ export default function App() {
           <div style={{ backgroundColor: '#1e222d', border: '1px solid #2a2e39', padding: '16px', borderRadius: '8px' }}>
             <div style={{ color: '#787b86', fontSize: '12px' }}>SOLDE ACTUEL</div>
             <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#fff', marginTop: '5px' }}>
-              {stats.currentBalance.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €
+              {hideBalance ? '•••••• €' : `${stats.currentBalance.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €`}
             </div>
           </div>
           <div style={{ backgroundColor: '#1e222d', border: '1px solid #2a2e39', padding: '16px', borderRadius: '8px' }}>
             <div style={{ color: '#787b86', fontSize: '12px' }}>P&L TOTAL</div>
             <div style={{ fontSize: '24px', fontWeight: 'bold', color: stats.totalPnl >= 0 ? '#089981' : '#f23645', marginTop: '5px' }}>
-              {fmtMoney(stats.totalPnl)}
+              {hideBalance ? '•••••• €' : fmtMoney(stats.totalPnl)}
             </div>
           </div>
           <div style={{ backgroundColor: '#1e222d', border: '1px solid #2a2e39', padding: '16px', borderRadius: '8px' }}>
@@ -222,7 +226,7 @@ export default function App() {
 
         {/* Historique des Positions */}
         <div style={{ backgroundColor: '#1e222d', border: '1px solid #2a2e39', borderRadius: '8px', overflow: 'hidden' }}>
-          <div style={{ padding: '15px', borderBottom: '1px solid #2a2e39', fontWeight: 'bold' }}>Positions & Capital</div>
+          <div style={{ padding: '15px', borderBottom: '1px solid #2a2e39', fontWeight: 'bold' }}>Positions & Historique</div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
               <thead>
@@ -293,7 +297,7 @@ export default function App() {
                 {formType === 'trade' ? (
                   <>
                     <div style={{ marginBottom: '10px' }}>
-                      <input type="text" placeholder="Paire (ex: XAUUSD, EURUSD)" value={symbol} onChange={(e) => setSymbol(e.target.value)} style={{ width: '100%', padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px' }} />
+                      <input type="text" placeholder="Paire (ex: XAUUSD, BTCUSD)" value={symbol} onChange={(e) => setSymbol(e.target.value)} style={{ width: '100%', padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px' }} />
                     </div>
                     <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
                       <button type="button" onClick={() => setDirection('long')} style={{ flex: 1, padding: '8px', border: '1px solid #089981', backgroundColor: direction === 'long' ? '#089981' : 'transparent', color: '#fff', borderRadius: '4px', cursor: 'pointer' }}>BUY</button>
