@@ -27,7 +27,7 @@ export default function App() {
   const [selectedImg, setSelectedImg] = useState(null);
   const [hideBalance, setHideBalance] = useState(false);
 
-  // Formulaire de Trade / Transfert (Dépôt & Retrait)
+  // Formulaire de Trade / Transfert
   const [formType, setFormType] = useState('trade');
   const [symbol, setSymbol] = useState('XAUUSD');
   const [direction, setDirection] = useState('long');
@@ -38,7 +38,7 @@ export default function App() {
   const [notes, setNotes] = useState('');
   const [screenshot, setScreenshot] = useState('');
   
-  // Champs spécifiques aux Transferts (Dépôt / Retrait)
+  // Champs spécifiques aux Transferts
   const [transferType, setTransferType] = useState('deposit');
   const [transferAmount, setTransferAmount] = useState('');
 
@@ -47,7 +47,7 @@ export default function App() {
     const loadData = async () => {
       setSaving(true);
       try {
-        const { data, error } = await supabase
+        const { data } = await supabase
           .from('journal_data')
           .select('content')
           .eq('id', 1)
@@ -92,19 +92,37 @@ export default function App() {
     saveData();
   }, [trades, startingBalance, loaded]);
 
-  // Capture directe d'image (Ctrl + V / Cmd + V)
-  const handlePaste = (e) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-    for (let i = 0; i < items.length; i++) {
-      if (items[i].type.indexOf("image") !== -1) {
-        const file = items[i].getAsFile();
-        const reader = new FileReader();
-        reader.onloadend = () => setScreenshot(reader.result);
-        reader.readAsDataURL(file);
-        e.preventDefault();
-        break;
+  // Écoute globale du Ctrl+V quand le modal est ouvert
+  useEffect(() => {
+    const handleGlobalPaste = (e) => {
+      if (!modalOpen || formType !== 'trade') return;
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf("image") !== -1) {
+          const file = items[i].getAsFile();
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            setScreenshot(reader.result);
+          };
+          reader.readAsDataURL(file);
+          break;
+        }
       }
+    };
+
+    window.addEventListener('paste', handleGlobalPaste);
+    return () => window.removeEventListener('paste', handleGlobalPaste);
+  }, [modalOpen, formType]);
+
+  // Gestion de l'import d'image par fichier (si le presse-papier pose problème)
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => setScreenshot(reader.result);
+      reader.readAsDataURL(file);
     }
   };
 
@@ -332,19 +350,15 @@ export default function App() {
                       <input type="number" step="0.1" placeholder="R:R ex: 2.5" value={rr} onChange={(e) => setRr(e.target.value)} style={{ flex: 1, padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px' }} />
                     </div>
 
-                    {/* Zone de collage + Aperçu Miniature */}
+                    {/* Zone de collage + Sélecteur de fichier de secours */}
                     <div 
-                      tabIndex="0" 
-                      onPaste={handlePaste} 
                       style={{ 
                         border: screenshot ? '2px solid #089981' : '2px dashed #2962ff', 
                         padding: '12px', 
                         textAlign: 'center', 
                         borderRadius: '6px', 
                         backgroundColor: '#131722', 
-                        marginBottom: '10px', 
-                        cursor: 'pointer', 
-                        outline: 'none'
+                        marginBottom: '10px'
                       }}
                     >
                       {screenshot ? (
@@ -366,9 +380,15 @@ export default function App() {
                           </div>
                         </div>
                       ) : (
-                        <span style={{ fontSize: '12px', color: '#787b86' }}>
-                          Clique ici puis <b>Ctrl + V</b> pour coller le graphique TradingView
-                        </span>
+                        <div>
+                          <div style={{ fontSize: '12px', color: '#787b86', marginBottom: '6px' }}>
+                            Fais <b>Ctrl + V</b> directement pour coller le graphique TradingView
+                          </div>
+                          <label style={{ fontSize: '11px', color: '#2962ff', cursor: 'pointer', textDecoration: 'underline' }}>
+                            ou choisis un fichier image
+                            <input type="file" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
+                          </label>
+                        </div>
                       )}
                     </div>
                   </>
@@ -386,7 +406,7 @@ export default function App() {
                       <input type="number" placeholder="ex: 500" value={transferAmount} onChange={(e) => setTransferAmount(e.target.value)} style={{ width: '100%', padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px', marginTop: '3px' }} />
                     </div>
                     <div style={{ marginBottom: '10px' }}>
-                      <input type="text" placeholder="Note (Optionnel, ex: Capital déposé)" value={notes} onChange={(e) => setNotes(e.target.value)} style={{ width: '100%', padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px' }} />
+                      <input type="text" placeholder="Note (Optionnel)" value={notes} onChange={(e) => setNotes(e.target.value)} style={{ width: '100%', padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px' }} />
                     </div>
                   </>
                 )}
