@@ -39,7 +39,7 @@ export default function App() {
   const [screenshot, setScreenshot] = useState('');
   
   // Champs spécifiques aux Transferts
-  const [transferType, setTransferType] = useState('deposit'); // 'deposit' par défaut
+  const [transferType, setTransferType] = useState('deposit');
   const [transferAmount, setTransferAmount] = useState('');
 
   // Charger les données (Supabase + Fallback LocalStorage)
@@ -332,12 +332,45 @@ export default function App() {
                       <input type="number" step="0.1" placeholder="R:R ex: 2.5" value={rr} onChange={(e) => setRr(e.target.value)} style={{ flex: 1, padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px' }} />
                     </div>
 
-                    {/* Zone de collage TradingView */}
-                    <div tabIndex="0" onPaste={handlePaste} style={{ border: '2px dashed #2962ff', padding: '12px', textAlign: 'center', borderRadius: '6px', backgroundColor: '#131722', marginBottom: '10px', cursor: 'pointer', outline: 'none' }}>
-                      <span style={{ fontSize: '12px', color: '#787b86' }}>
-                        Clique ici puis <b>Ctrl + V</b> pour coller le graphique TradingView
-                      </span>
-                      {screenshot && <div style={{ color: '#089981', fontSize: '11px', marginTop: '4px' }}>✓ Image capturée avec succès</div>}
+                    {/* Zone de collage + Aperçu Miniature direct */}
+                    <div 
+                      tabIndex="0" 
+                      onPaste={handlePaste} 
+                      style={{ 
+                        border: screenshot ? '2px solid #089981' : '2px dashed #2962ff', 
+                        padding: '12px', 
+                        textAlign: 'center', 
+                        borderRadius: '6px', 
+                        backgroundColor: '#131722', 
+                        marginBottom: '10px', 
+                        cursor: 'pointer', 
+                        outline: 'none',
+                        position: 'relative'
+                      }}
+                    >
+                      {screenshot ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                          <img 
+                            src={screenshot} 
+                            alt="Aperçu graphique" 
+                            style={{ maxWidth: '100%', maxHeight: '140px', borderRadius: '4px', border: '1px solid #2a2e39', objectFit: 'contain' }} 
+                          />
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <span style={{ color: '#089981', fontSize: '12px', fontWeight: 'bold' }}>✓ Graphique capturé</span>
+                            <button 
+                              type="button" 
+                              onClick={() => setScreenshot('')}
+                              style={{ backgroundColor: '#f23645', color: '#fff', border: 'none', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
+                            >
+                              Supprimer
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: '12px', color: '#787b86' }}>
+                          Clique ici puis <b>Ctrl + V</b> pour coller le graphique TradingView
+                        </span>
+                      )}
                     </div>
                   </>
                 ) : (
@@ -367,7 +400,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Modal Visionneuse Image */}
+        {/* Modal Visionneuse Image Grand Format */}
         {selectedImg && (
           <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: '20px' }}>
             <div style={{ position: 'relative', maxWidth: '90%' }}>
