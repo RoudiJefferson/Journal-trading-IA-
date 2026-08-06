@@ -27,8 +27,8 @@ export default function App() {
   const [selectedImg, setSelectedImg] = useState(null);
   const [hideBalance, setHideBalance] = useState(false);
 
-  // Formulaire de Trade / Transfert
-  const [formType, setFormType] = useState('trade');
+  // Formulaire de Trade / Transfert (Dépôt & Retrait)
+  const [formType, setFormType] = useState('trade'); // 'trade' ou 'transfer'
   const [symbol, setSymbol] = useState('XAUUSD');
   const [direction, setDirection] = useState('long');
   const [entryDate, setEntryDate] = useState(todayISO());
@@ -37,7 +37,9 @@ export default function App() {
   const [strategy, setStrategy] = useState('Liquidity Sweep / ICT');
   const [notes, setNotes] = useState('');
   const [screenshot, setScreenshot] = useState('');
-  const [transferType, setTransferType] = useState('withdrawal');
+  
+  // Champs spécifiques aux Transferts
+  const [transferType, setTransferType] = useState('deposit'); // 'deposit' par défaut
   const [transferAmount, setTransferAmount] = useState('');
 
   // Charger les données (Supabase + Fallback LocalStorage)
@@ -197,7 +199,7 @@ export default function App() {
               onClick={() => setModalOpen(true)}
               style={{ backgroundColor: '#2962ff', color: '#fff', border: 'none', padding: '10px 18px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
             >
-              + Enregistrer un Trade
+              + Enregistrer / Dépôt
             </button>
           </div>
         </header>
@@ -211,7 +213,7 @@ export default function App() {
             </div>
           </div>
           <div style={{ backgroundColor: '#1e222d', border: '1px solid #2a2e39', padding: '16px', borderRadius: '8px' }}>
-            <div style={{ color: '#787b86', fontSize: '12px' }}>P&L TOTAL</div>
+            <div style={{ color: '#787b86', fontSize: '12px' }}>P&L TOTAL TRADES</div>
             <div style={{ fontSize: '24px', fontWeight: 'bold', color: stats.totalPnl >= 0 ? '#089981' : '#f23645', marginTop: '5px' }}>
               {hideBalance ? '•••••• €' : fmtMoney(stats.totalPnl)}
             </div>
@@ -224,41 +226,45 @@ export default function App() {
           </div>
         </div>
 
-        {/* Historique des Positions */}
+        {/* Historique des Positions & Mouvements */}
         <div style={{ backgroundColor: '#1e222d', border: '1px solid #2a2e39', borderRadius: '8px', overflow: 'hidden' }}>
-          <div style={{ padding: '15px', borderBottom: '1px solid #2a2e39', fontWeight: 'bold' }}>Positions & Historique</div>
+          <div style={{ padding: '15px', borderBottom: '1px solid #2a2e39', fontWeight: 'bold' }}>Historique des Opérations & Dépôts</div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
               <thead>
                 <tr style={{ color: '#787b86', borderBottom: '1px solid #2a2e39' }}>
                   <th style={{ padding: '12px' }}>Date</th>
                   <th style={{ padding: '12px' }}>Paire / Type</th>
-                  <th style={{ padding: '12px' }}>Sens</th>
-                  <th style={{ padding: '12px' }}>P&L Direct</th>
+                  <th style={{ padding: '12px' }}>Sens / Operation</th>
+                  <th style={{ padding: '12px' }}>P&L / Montant</th>
                   <th style={{ padding: '12px' }}>R:R</th>
-                  <th style={{ padding: '12px' }}>Graphique</th>
+                  <th style={{ padding: '12px' }}>Graphique / Notes</th>
                   <th style={{ padding: '12px', textAlign: 'right' }}>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {trades.length === 0 ? (
-                  <tr><td colSpan="7" style={{ padding: '30px', textAlign: 'center', color: '#787b86' }}>Aucun trade enregistré.</td></tr>
+                  <tr><td colSpan="7" style={{ padding: '30px', textAlign: 'center', color: '#787b86' }}>Aucune donnée enregistrée.</td></tr>
                 ) : (
                   trades.map((t) => (
                     <tr key={t.id} style={{ borderBottom: '1px solid #2a2e39' }}>
                       <td style={{ padding: '12px', color: '#787b86' }}>{t.entryDate}</td>
                       <td style={{ padding: '12px', fontWeight: 'bold', color: '#fff' }}>
-                        {t.type === 'transfer' ? (t.transferType === 'deposit' ? '📥 DÉPÔT' : '📤 RETRAIT') : t.symbol}
+                        {t.type === 'transfer' ? (t.transferType === 'deposit' ? '💳 DÉPÔT' : '📤 RETRAIT') : t.symbol}
                       </td>
                       <td style={{ padding: '12px' }}>
-                        {t.type === 'trade' && (
+                        {t.type === 'trade' ? (
                           <span style={{ color: t.direction === 'long' ? '#089981' : '#f23645', fontWeight: 'bold' }}>
                             {t.direction === 'long' ? 'BUY' : 'SELL'}
                           </span>
+                        ) : (
+                          <span style={{ color: t.transferType === 'deposit' ? '#089981' : '#f59e0b', fontSize: '11px', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#131722' }}>
+                            {t.transferType === 'deposit' ? 'CREDIT' : 'DEBIT'}
+                          </span>
                         )}
                       </td>
-                      <td style={{ padding: '12px', fontWeight: 'bold', color: t.type === 'transfer' ? '#f59e0b' : (t.rawPnl >= 0 ? '#089981' : '#f23645') }}>
-                        {t.type === 'transfer' ? `${t.transferType === 'deposit' ? '+' : '-'}${t.transferAmount} €` : fmtMoney(t.rawPnl)}
+                      <td style={{ padding: '12px', fontWeight: 'bold', color: t.type === 'transfer' ? (t.transferType === 'deposit' ? '#089981' : '#f59e0b') : (t.rawPnl >= 0 ? '#089981' : '#f23645') }}>
+                        {t.type === 'transfer' ? `${t.transferType === 'deposit' ? '+' : '-'}${t.transferAmount.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €` : fmtMoney(t.rawPnl)}
                       </td>
                       <td style={{ padding: '12px' }}>{t.rr ? `1:${t.rr}` : '—'}</td>
                       <td style={{ padding: '12px' }}>
@@ -266,7 +272,7 @@ export default function App() {
                           <button onClick={() => setSelectedImg(t.screenshot)} style={{ backgroundColor: '#2a2e39', color: '#2962ff', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>
                             🖼️ Voir
                           </button>
-                        ) : '—'}
+                        ) : (t.notes ? <span style={{ fontSize: '11px', color: '#787b86' }}>{t.notes}</span> : '—')}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'right' }}>
                         <button onClick={() => deleteTrade(t.id)} style={{ backgroundColor: 'transparent', color: '#f23645', border: 'none', cursor: 'pointer', fontSize: '14px' }}>🗑️</button>
@@ -279,7 +285,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* Modal Nouveau Trade */}
+        {/* Modal Nouveau Trade / Dépôt */}
         {modalOpen && (
           <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
             <div style={{ backgroundColor: '#1e222d', border: '1px solid #2a2e39', padding: '20px', borderRadius: '8px', width: '420px', maxWidth: '90%' }}>
@@ -288,12 +294,30 @@ export default function App() {
                 <button onClick={() => setModalOpen(false)} style={{ backgroundColor: 'transparent', color: '#787b86', border: 'none', cursor: 'pointer', fontSize: '16px' }}>✕</button>
               </div>
 
+              {/* Selecteur d'Onglet: Trade vs Dépôt / Retrait */}
               <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
-                <button onClick={() => setFormType('trade')} style={{ flex: 1, padding: '8px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', backgroundColor: formType === 'trade' ? '#2962ff' : '#2a2e39', color: '#fff' }}>Trade</button>
-                <button onClick={() => setFormType('transfer')} style={{ flex: 1, padding: '8px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', backgroundColor: formType === 'transfer' ? '#2962ff' : '#2a2e39', color: '#fff' }}>Dépôt / Retrait</button>
+                <button 
+                  type="button"
+                  onClick={() => setFormType('trade')} 
+                  style={{ flex: 1, padding: '8px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', backgroundColor: formType === 'trade' ? '#2962ff' : '#2a2e39', color: '#fff' }}
+                >
+                  📈 Trade
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setFormType('transfer')} 
+                  style={{ flex: 1, padding: '8px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', backgroundColor: formType === 'transfer' ? '#2962ff' : '#2a2e39', color: '#fff' }}
+                >
+                  💳 Dépôt / Retrait
+                </button>
               </div>
 
               <form onSubmit={handleSubmit}>
+                <div style={{ marginBottom: '10px' }}>
+                  <label style={{ fontSize: '11px', color: '#787b86' }}>Date</label>
+                  <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} style={{ width: '100%', padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px', marginTop: '3px' }} />
+                </div>
+
                 {formType === 'trade' ? (
                   <>
                     <div style={{ marginBottom: '10px' }}>
@@ -317,13 +341,22 @@ export default function App() {
                     </div>
                   </>
                 ) : (
-                  <div style={{ marginBottom: '10px' }}>
-                    <select value={transferType} onChange={(e) => setTransferType(e.target.value)} style={{ width: '100%', padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px', marginBottom: '10px' }}>
-                      <option value="withdrawal">Retrait (-)</option>
-                      <option value="deposit">Dépôt (+)</option>
-                    </select>
-                    <input type="number" placeholder="Montant en (€)" value={transferAmount} onChange={(e) => setTransferAmount(e.target.value)} style={{ width: '100%', padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px' }} />
-                  </div>
+                  <>
+                    <div style={{ marginBottom: '10px' }}>
+                      <label style={{ fontSize: '11px', color: '#787b86' }}>Type de Mouvement</label>
+                      <select value={transferType} onChange={(e) => setTransferType(e.target.value)} style={{ width: '100%', padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px', marginTop: '3px' }}>
+                        <option value="deposit">💳 Dépôt (+)</option>
+                        <option value="withdrawal">📤 Retrait (-)</option>
+                      </select>
+                    </div>
+                    <div style={{ marginBottom: '10px' }}>
+                      <label style={{ fontSize: '11px', color: '#787b86' }}>Montant (€)</label>
+                      <input type="number" placeholder="ex: 500" value={transferAmount} onChange={(e) => setTransferAmount(e.target.value)} style={{ width: '100%', padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px', marginTop: '3px' }} />
+                    </div>
+                    <div style={{ marginBottom: '10px' }}>
+                      <input type="text" placeholder="Note (Optionnel, ex: Ajout capital)" value={notes} onChange={(e) => setNotes(e.target.value)} style={{ width: '100%', padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px' }} />
+                    </div>
+                  </>
                 )}
 
                 <button type="submit" style={{ width: '100%', backgroundColor: '#2962ff', color: '#fff', border: 'none', padding: '10px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', marginTop: '10px' }}>
