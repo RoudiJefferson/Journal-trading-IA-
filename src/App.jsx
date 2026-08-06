@@ -1,13 +1,33 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { createClient } from '@supabase/supabase-js';
 
 // =========================================================================
-// CONFIGURATION SUPABASE
+// 1. CONFIGURATION SUPABASE (Intégration directe sans crash Vercel)
 // =========================================================================
-const SUPABASE_URL = "https://rvxfnfddtgjxspyihzbq.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_TCwIr7C0LvztrmbuxMm9Zg_3B_1X96U";
+const SUPABASE_URL = "https://rvxfnfddtgjxspyihzbq.supabase.co"; // Ton URL Supabase
+const SUPABASE_ANON_KEY = "COLLE_TA_CLE_PUBLIABLE_ICI"; // Ligne 11: Ta clé sb_publishable_...
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Client Supabase léger pour le Web
+const supabaseRequest = async (endpoint, method = 'GET', body = null) => {
+  if (!SUPABASE_URL || SUPABASE_URL.includes("YOUR_SUPABASE")) return null;
+  try {
+    const options = {
+      method,
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': method === 'POST' || method === 'PUT' ? 'return=representation' : 'return=minimal'
+      }
+    };
+    if (body) options.body = JSON.stringify(body);
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${endpoint}`, options);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) {
+    console.error("Erreur Supabase API:", e);
+    return null;
+  }
+};
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -25,47 +45,35 @@ export default function App() {
   const [startingBalance, setStartingBalance] = useState(10000);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedImg, setSelectedImg] = useState(null);
-  const [hideBalance, setHideBalance] = useState(false);
 
-  // Formulaire de Trade / Transfert (Dépôt & Retrait)
-  const [formType, setFormType] = useState('trade'); // 'trade' ou 'transfer'
+  // Formulaire de Trade / Transfert
+  const [formType, setFormType] = useState('trade');
   const [symbol, setSymbol] = useState('XAUUSD');
   const [direction, setDirection] = useState('long');
   const [entryDate, setEntryDate] = useState(todayISO());
   const [rawPnl, setRawPnl] = useState('');
   const [rr, setRr] = useState('');
-  const [strategy, setStrategy] = useState('Liquidity Sweep / ICT');
+  const [strategy, setStrategy] = useState('Liquidity Sweep');
   const [notes, setNotes] = useState('');
   const [screenshot, setScreenshot] = useState('');
-  
-  // Champs spécifiques aux Transferts
-  const [transferType, setTransferType] = useState('deposit'); // 'deposit' par défaut
+  const [transferType, setTransferType] = useState('withdrawal');
   const [transferAmount, setTransferAmount] = useState('');
 
-  // Charger les données (Supabase + Fallback LocalStorage)
+  // Charger les données (Supabase + Sauvegarde de secours LocalStorage)
   useEffect(() => {
     const loadData = async () => {
       setSaving(true);
-      try {
-        const { data, error } = await supabase
-          .from('journal_data')
-          .select('content')
-          .eq('id', 1)
-          .single();
-
-        if (data && data.content) {
-          setTrades(data.content.trades || []);
-          setStartingBalance(data.content.startingBalance ?? 10000);
-        } else {
-          const local = localStorage.getItem('rm_trading_journal');
-          if (local) {
-            const parsed = JSON.parse(local);
-            setTrades(parsed.trades || []);
-            setStartingBalance(parsed.startingBalance || 10000);
-          }
+      const cloudData = await supabaseRequest('journal_data?id=eq.1&select=content');
+      if (cloudData && cloudData[0] && cloudData[0].content) {
+        setTrades(cloudData[0].content.trades || []);
+        setStartingBalance(cloudData[0].content.startingBalance ?? 10000);
+      } else {
+        const local = localStorage.getItem('rm_trading_journal');
+        if (local) {
+          const parsed = JSON.parse(local);
+          setTrades(parsed.trades || []);
+          setStartingBalance(parsed.startingBalance || 10000);
         }
-      } catch (err) {
-        console.error("Erreur de chargement:", err);
       }
       setSaving(false);
       setLoaded(true);
@@ -73,26 +81,20 @@ export default function App() {
     loadData();
   }, []);
 
-  // Sauvegarde automatique
+  // Sauvegarder automatiquement lors des changements
   useEffect(() => {
     if (!loaded) return;
     const saveData = async () => {
       setSaving(true);
       const payload = { startingBalance, trades };
       localStorage.setItem('rm_trading_journal', JSON.stringify(payload));
-      try {
-        await supabase
-          .from('journal_data')
-          .upsert({ id: 1, content: payload });
-      } catch (err) {
-        console.error("Erreur de sauvegarde:", err);
-      }
+      await supabaseRequest('journal_data?id=eq.1', 'POST', { id: 1, content: payload });
       setSaving(false);
     };
     saveData();
   }, [trades, startingBalance, loaded]);
 
-  // Capture directe d'image (Ctrl + V / Cmd + V)
+  // Copier-Coller direct d'image TradingView (Ctrl + V)
   const handlePaste = (e) => {
     const items = e.clipboardData?.items;
     if (!items) return;
@@ -108,7 +110,7 @@ export default function App() {
     }
   };
 
-  // Calculs KPIs & Performance
+  // Calculs financiers
   const stats = useMemo(() => {
     let currentBalance = startingBalance;
     let totalPnl = 0;
@@ -185,23 +187,15 @@ export default function App() {
           <div>
             <h1 style={{ margin: 0, color: '#2962ff', fontSize: '22px' }}>RM Trading Journal</h1>
             <span style={{ fontSize: '12px', color: '#787b86' }}>
-              {saving ? '⏳ Synchronisation...' : '🟢 Base Cloud Active'}
+              {saving ? '⏳ Synchronisation...' : '🟢 Connecté au Cloud'}
             </span>
           </div>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button 
-              onClick={() => setHideBalance(!hideBalance)}
-              style={{ backgroundColor: '#2a2e39', color: '#fff', border: 'none', padding: '10px 14px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}
-            >
-              {hideBalance ? '👁️ Afficher Solde' : '🙈 Masquer Solde'}
-            </button>
-            <button 
-              onClick={() => setModalOpen(true)}
-              style={{ backgroundColor: '#2962ff', color: '#fff', border: 'none', padding: '10px 18px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
-            >
-              + Enregistrer / Dépôt
-            </button>
-          </div>
+          <button 
+            onClick={() => setModalOpen(true)}
+            style={{ backgroundColor: '#2962ff', color: '#fff', border: 'none', padding: '10px 18px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+          >
+            + Enregistrer un Trade
+          </button>
         </header>
 
         {/* Dashboard Solde & KPIs */}
@@ -209,13 +203,13 @@ export default function App() {
           <div style={{ backgroundColor: '#1e222d', border: '1px solid #2a2e39', padding: '16px', borderRadius: '8px' }}>
             <div style={{ color: '#787b86', fontSize: '12px' }}>SOLDE ACTUEL</div>
             <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#fff', marginTop: '5px' }}>
-              {hideBalance ? '•••••• €' : `${stats.currentBalance.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €`}
+              {stats.currentBalance.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €
             </div>
           </div>
           <div style={{ backgroundColor: '#1e222d', border: '1px solid #2a2e39', padding: '16px', borderRadius: '8px' }}>
-            <div style={{ color: '#787b86', fontSize: '12px' }}>P&L TOTAL TRADES</div>
+            <div style={{ color: '#787b86', fontSize: '12px' }}>P&L TOTAL</div>
             <div style={{ fontSize: '24px', fontWeight: 'bold', color: stats.totalPnl >= 0 ? '#089981' : '#f23645', marginTop: '5px' }}>
-              {hideBalance ? '•••••• €' : fmtMoney(stats.totalPnl)}
+              {fmtMoney(stats.totalPnl)}
             </div>
           </div>
           <div style={{ backgroundColor: '#1e222d', border: '1px solid #2a2e39', padding: '16px', borderRadius: '8px' }}>
@@ -226,45 +220,41 @@ export default function App() {
           </div>
         </div>
 
-        {/* Historique des Positions & Mouvements */}
+        {/* Historique des Positions */}
         <div style={{ backgroundColor: '#1e222d', border: '1px solid #2a2e39', borderRadius: '8px', overflow: 'hidden' }}>
-          <div style={{ padding: '15px', borderBottom: '1px solid #2a2e39', fontWeight: 'bold' }}>Historique des Opérations & Dépôts</div>
+          <div style={{ padding: '15px', borderBottom: '1px solid #2a2e39', fontWeight: 'bold' }}>Positions & Capital</div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
               <thead>
                 <tr style={{ color: '#787b86', borderBottom: '1px solid #2a2e39' }}>
                   <th style={{ padding: '12px' }}>Date</th>
                   <th style={{ padding: '12px' }}>Paire / Type</th>
-                  <th style={{ padding: '12px' }}>Sens / Operation</th>
-                  <th style={{ padding: '12px' }}>P&L / Montant</th>
+                  <th style={{ padding: '12px' }}>Sens</th>
+                  <th style={{ padding: '12px' }}>P&L Direct</th>
                   <th style={{ padding: '12px' }}>R:R</th>
-                  <th style={{ padding: '12px' }}>Graphique / Notes</th>
+                  <th style={{ padding: '12px' }}>Graphique</th>
                   <th style={{ padding: '12px', textAlign: 'right' }}>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {trades.length === 0 ? (
-                  <tr><td colSpan="7" style={{ padding: '30px', textAlign: 'center', color: '#787b86' }}>Aucune donnée enregistrée.</td></tr>
+                  <tr><td colSpan="7" style={{ padding: '30px', textAlign: 'center', color: '#787b86' }}>Aucun trade enregistré.</td></tr>
                 ) : (
                   trades.map((t) => (
                     <tr key={t.id} style={{ borderBottom: '1px solid #2a2e39' }}>
                       <td style={{ padding: '12px', color: '#787b86' }}>{t.entryDate}</td>
                       <td style={{ padding: '12px', fontWeight: 'bold', color: '#fff' }}>
-                        {t.type === 'transfer' ? (t.transferType === 'deposit' ? '💳 DÉPÔT' : '📤 RETRAIT') : t.symbol}
+                        {t.type === 'transfer' ? (t.transferType === 'deposit' ? '📥 DÉPÔT' : '📤 RETRAIT') : t.symbol}
                       </td>
                       <td style={{ padding: '12px' }}>
-                        {t.type === 'trade' ? (
+                        {t.type === 'trade' && (
                           <span style={{ color: t.direction === 'long' ? '#089981' : '#f23645', fontWeight: 'bold' }}>
                             {t.direction === 'long' ? 'BUY' : 'SELL'}
                           </span>
-                        ) : (
-                          <span style={{ color: t.transferType === 'deposit' ? '#089981' : '#f59e0b', fontSize: '11px', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#131722' }}>
-                            {t.transferType === 'deposit' ? 'CREDIT' : 'DEBIT'}
-                          </span>
                         )}
                       </td>
-                      <td style={{ padding: '12px', fontWeight: 'bold', color: t.type === 'transfer' ? (t.transferType === 'deposit' ? '#089981' : '#f59e0b') : (t.rawPnl >= 0 ? '#089981' : '#f23645') }}>
-                        {t.type === 'transfer' ? `${t.transferType === 'deposit' ? '+' : '-'}${t.transferAmount.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €` : fmtMoney(t.rawPnl)}
+                      <td style={{ padding: '12px', fontWeight: 'bold', color: t.type === 'transfer' ? '#f59e0b' : (t.rawPnl >= 0 ? '#089981' : '#f23645') }}>
+                        {t.type === 'transfer' ? `${t.transferType === 'deposit' ? '+' : '-'}${t.transferAmount} €` : fmtMoney(t.rawPnl)}
                       </td>
                       <td style={{ padding: '12px' }}>{t.rr ? `1:${t.rr}` : '—'}</td>
                       <td style={{ padding: '12px' }}>
@@ -272,7 +262,7 @@ export default function App() {
                           <button onClick={() => setSelectedImg(t.screenshot)} style={{ backgroundColor: '#2a2e39', color: '#2962ff', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>
                             🖼️ Voir
                           </button>
-                        ) : (t.notes ? <span style={{ fontSize: '11px', color: '#787b86' }}>{t.notes}</span> : '—')}
+                        ) : '—'}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'right' }}>
                         <button onClick={() => deleteTrade(t.id)} style={{ backgroundColor: 'transparent', color: '#f23645', border: 'none', cursor: 'pointer', fontSize: '14px' }}>🗑️</button>
@@ -285,7 +275,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* Modal Nouveau Trade / Dépôt */}
+        {/* Modal Nouveau Trade */}
         {modalOpen && (
           <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
             <div style={{ backgroundColor: '#1e222d', border: '1px solid #2a2e39', padding: '20px', borderRadius: '8px', width: '420px', maxWidth: '90%' }}>
@@ -294,34 +284,16 @@ export default function App() {
                 <button onClick={() => setModalOpen(false)} style={{ backgroundColor: 'transparent', color: '#787b86', border: 'none', cursor: 'pointer', fontSize: '16px' }}>✕</button>
               </div>
 
-              {/* Selecteur d'Onglet: Trade vs Dépôt / Retrait */}
               <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
-                <button 
-                  type="button"
-                  onClick={() => setFormType('trade')} 
-                  style={{ flex: 1, padding: '8px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', backgroundColor: formType === 'trade' ? '#2962ff' : '#2a2e39', color: '#fff' }}
-                >
-                  📈 Trade
-                </button>
-                <button 
-                  type="button"
-                  onClick={() => setFormType('transfer')} 
-                  style={{ flex: 1, padding: '8px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', backgroundColor: formType === 'transfer' ? '#2962ff' : '#2a2e39', color: '#fff' }}
-                >
-                  💳 Dépôt / Retrait
-                </button>
+                <button onClick={() => setFormType('trade')} style={{ flex: 1, padding: '8px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', backgroundColor: formType === 'trade' ? '#2962ff' : '#2a2e39', color: '#fff' }}>Trade</button>
+                <button onClick={() => setFormType('transfer')} style={{ flex: 1, padding: '8px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', backgroundColor: formType === 'transfer' ? '#2962ff' : '#2a2e39', color: '#fff' }}>Dépôt / Retrait</button>
               </div>
 
               <form onSubmit={handleSubmit}>
-                <div style={{ marginBottom: '10px' }}>
-                  <label style={{ fontSize: '11px', color: '#787b86' }}>Date</label>
-                  <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} style={{ width: '100%', padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px', marginTop: '3px' }} />
-                </div>
-
                 {formType === 'trade' ? (
                   <>
                     <div style={{ marginBottom: '10px' }}>
-                      <input type="text" placeholder="Paire (ex: XAUUSD, BTCUSD)" value={symbol} onChange={(e) => setSymbol(e.target.value)} style={{ width: '100%', padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px' }} />
+                      <input type="text" placeholder="Paire (ex: XAUUSD, EURUSD)" value={symbol} onChange={(e) => setSymbol(e.target.value)} style={{ width: '100%', padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px' }} />
                     </div>
                     <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
                       <button type="button" onClick={() => setDirection('long')} style={{ flex: 1, padding: '8px', border: '1px solid #089981', backgroundColor: direction === 'long' ? '#089981' : 'transparent', color: '#fff', borderRadius: '4px', cursor: 'pointer' }}>BUY</button>
@@ -341,22 +313,13 @@ export default function App() {
                     </div>
                   </>
                 ) : (
-                  <>
-                    <div style={{ marginBottom: '10px' }}>
-                      <label style={{ fontSize: '11px', color: '#787b86' }}>Type de Mouvement</label>
-                      <select value={transferType} onChange={(e) => setTransferType(e.target.value)} style={{ width: '100%', padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px', marginTop: '3px' }}>
-                        <option value="deposit">💳 Dépôt (+)</option>
-                        <option value="withdrawal">📤 Retrait (-)</option>
-                      </select>
-                    </div>
-                    <div style={{ marginBottom: '10px' }}>
-                      <label style={{ fontSize: '11px', color: '#787b86' }}>Montant (€)</label>
-                      <input type="number" placeholder="ex: 500" value={transferAmount} onChange={(e) => setTransferAmount(e.target.value)} style={{ width: '100%', padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px', marginTop: '3px' }} />
-                    </div>
-                    <div style={{ marginBottom: '10px' }}>
-                      <input type="text" placeholder="Note (Optionnel, ex: Ajout capital)" value={notes} onChange={(e) => setNotes(e.target.value)} style={{ width: '100%', padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px' }} />
-                    </div>
-                  </>
+                  <div style={{ marginBottom: '10px' }}>
+                    <select value={transferType} onChange={(e) => setTransferType(e.target.value)} style={{ width: '100%', padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px', marginBottom: '10px' }}>
+                      <option value="withdrawal">Retrait (-)</option>
+                      <option value="deposit">Dépôt (+)</option>
+                    </select>
+                    <input type="number" placeholder="Montant en (€)" value={transferAmount} onChange={(e) => setTransferAmount(e.target.value)} style={{ width: '100%', padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px' }} />
+                  </div>
                 )}
 
                 <button type="submit" style={{ width: '100%', backgroundColor: '#2962ff', color: '#fff', border: 'none', padding: '10px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', marginTop: '10px' }}>
