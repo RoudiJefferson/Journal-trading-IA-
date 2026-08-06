@@ -27,8 +27,7 @@ export default function App() {
   const [selectedImg, setSelectedImg] = useState(null);
   const [hideBalance, setHideBalance] = useState(false);
 
-  // Formulaire de Trade / Transfert
-  const [formType, setFormType] = useState('trade');
+  // Formulaire de Trade
   const [symbol, setSymbol] = useState('XAUUSD');
   const [direction, setDirection] = useState('long');
   const [entryDate, setEntryDate] = useState(todayISO());
@@ -37,12 +36,8 @@ export default function App() {
   const [strategy, setStrategy] = useState('Liquidity Sweep / ICT');
   const [notes, setNotes] = useState('');
   const [screenshot, setScreenshot] = useState('');
-  
-  // Champs spécifiques aux Transferts
-  const [transferType, setTransferType] = useState('deposit');
-  const [transferAmount, setTransferAmount] = useState('');
 
-  // Charger les données (Supabase + Fallback LocalStorage)
+  // Charger les données (Supabase + LocalStorage)
   useEffect(() => {
     const loadData = async () => {
       setSaving(true);
@@ -92,10 +87,10 @@ export default function App() {
     saveData();
   }, [trades, startingBalance, loaded]);
 
-  // Écoute globale du Ctrl+V quand le modal est ouvert
+  // Capture directe Ctrl + V quand la modal est ouverte
   useEffect(() => {
     const handleGlobalPaste = (e) => {
-      if (!modalOpen || formType !== 'trade') return;
+      if (!modalOpen) return;
       const items = e.clipboardData?.items;
       if (!items) return;
 
@@ -114,19 +109,9 @@ export default function App() {
 
     window.addEventListener('paste', handleGlobalPaste);
     return () => window.removeEventListener('paste', handleGlobalPaste);
-  }, [modalOpen, formType]);
+  }, [modalOpen]);
 
-  // Gestion de l'import d'image par fichier (si le presse-papier pose problème)
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => setScreenshot(reader.result);
-      reader.readAsDataURL(file);
-    }
-  };
-
-  // Calculs KPIs & Performance
+  // Calculs KPIs
   const stats = useMemo(() => {
     let currentBalance = startingBalance;
     let totalPnl = 0;
@@ -134,16 +119,11 @@ export default function App() {
     let losses = 0;
 
     trades.forEach(t => {
-      if (t.type === 'transfer') {
-        const amt = Number(t.transferAmount || 0);
-        currentBalance += t.transferType === 'deposit' ? amt : -amt;
-      } else {
-        const pnl = Number(t.rawPnl || 0);
-        totalPnl += pnl;
-        currentBalance += pnl;
-        if (pnl > 0) wins++;
-        if (pnl < 0) losses++;
-      }
+      const pnl = Number(t.rawPnl || 0);
+      totalPnl += pnl;
+      currentBalance += pnl;
+      if (pnl > 0) wins++;
+      if (pnl < 0) losses++;
     });
 
     const totalClosed = wins + losses;
@@ -154,40 +134,26 @@ export default function App() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    let newEntry = {};
+    if (!symbol) return;
 
-    if (formType === 'transfer') {
-      if (!transferAmount) return;
-      newEntry = {
-        id: uid(),
-        type: 'transfer',
-        entryDate,
-        transferType,
-        transferAmount: Number(transferAmount),
-        notes
-      };
-    } else {
-      if (!symbol) return;
-      newEntry = {
-        id: uid(),
-        type: 'trade',
-        symbol: symbol.toUpperCase(),
-        direction,
-        entryDate,
-        rawPnl: rawPnl === '' ? 0 : Number(rawPnl),
-        rr: rr === '' ? '' : Number(rr),
-        strategy,
-        notes,
-        screenshot
-      };
-    }
+    const newEntry = {
+      id: uid(),
+      symbol: symbol.toUpperCase(),
+      direction,
+      entryDate,
+      rawPnl: rawPnl === '' ? 0 : Number(rawPnl),
+      rr: rr === '' ? '' : Number(rr),
+      strategy,
+      notes,
+      screenshot
+    };
 
     setTrades([newEntry, ...trades]);
     setModalOpen(false);
     setRawPnl('');
+    setRr('');
     setNotes('');
     setScreenshot('');
-    setTransferAmount('');
   };
 
   const deleteTrade = (id) => {
@@ -217,12 +183,12 @@ export default function App() {
               onClick={() => setModalOpen(true)}
               style={{ backgroundColor: '#2962ff', color: '#fff', border: 'none', padding: '10px 18px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
             >
-              + Enregistrer / Dépôt
+              + Nouveau Trade
             </button>
           </div>
         </header>
 
-        {/* Dashboard Solde & KPIs */}
+        {/* KPIs */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '15px', margin: '25px 0' }}>
           <div style={{ backgroundColor: '#1e222d', border: '1px solid #2a2e39', padding: '16px', borderRadius: '8px' }}>
             <div style={{ color: '#787b86', fontSize: '12px' }}>SOLDE ACTUEL</div>
@@ -231,7 +197,7 @@ export default function App() {
             </div>
           </div>
           <div style={{ backgroundColor: '#1e222d', border: '1px solid #2a2e39', padding: '16px', borderRadius: '8px' }}>
-            <div style={{ color: '#787b86', fontSize: '12px' }}>P&L TOTAL TRADES</div>
+            <div style={{ color: '#787b86', fontSize: '12px' }}>P&L TOTAL</div>
             <div style={{ fontSize: '24px', fontWeight: 'bold', color: stats.totalPnl >= 0 ? '#089981' : '#f23645', marginTop: '5px' }}>
               {hideBalance ? '•••••• €' : fmtMoney(stats.totalPnl)}
             </div>
@@ -242,47 +208,48 @@ export default function App() {
               {stats.winRate.toFixed(1)} %
             </div>
           </div>
+          <div style={{ backgroundColor: '#1e222d', border: '1px solid #2a2e39', padding: '16px', borderRadius: '8px' }}>
+            <div style={{ color: '#787b86', fontSize: '12px' }}>TOTAL TRADES</div>
+            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#fff', marginTop: '5px' }}>
+              {stats.totalClosed}
+            </div>
+          </div>
         </div>
 
-        {/* Historique des Positions & Mouvements */}
+        {/* Tableau des Trades */}
         <div style={{ backgroundColor: '#1e222d', border: '1px solid #2a2e39', borderRadius: '8px', overflow: 'hidden' }}>
-          <div style={{ padding: '15px', borderBottom: '1px solid #2a2e39', fontWeight: 'bold' }}>Historique des Opérations & Dépôts</div>
+          <div style={{ padding: '15px', borderBottom: '1px solid #2a2e39', fontWeight: 'bold' }}>Journal de Trading</div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
               <thead>
                 <tr style={{ color: '#787b86', borderBottom: '1px solid #2a2e39' }}>
                   <th style={{ padding: '12px' }}>Date</th>
-                  <th style={{ padding: '12px' }}>Paire / Type</th>
-                  <th style={{ padding: '12px' }}>Sens / Opération</th>
-                  <th style={{ padding: '12px' }}>P&L / Montant</th>
+                  <th style={{ padding: '12px' }}>Paire</th>
+                  <th style={{ padding: '12px' }}>Sens</th>
+                  <th style={{ padding: '12px' }}>Stratégie</th>
+                  <th style={{ padding: '12px' }}>P&L (€)</th>
                   <th style={{ padding: '12px' }}>R:R</th>
-                  <th style={{ padding: '12px' }}>Graphique / Notes</th>
+                  <th style={{ padding: '12px' }}>Graphique</th>
+                  <th style={{ padding: '12px' }}>Notes</th>
                   <th style={{ padding: '12px', textAlign: 'right' }}>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {trades.length === 0 ? (
-                  <tr><td colSpan="7" style={{ padding: '30px', textAlign: 'center', color: '#787b86' }}>Aucune donnée enregistrée.</td></tr>
+                  <tr><td colSpan="9" style={{ padding: '30px', textAlign: 'center', color: '#787b86' }}>Aucun trade enregistré.</td></tr>
                 ) : (
                   trades.map((t) => (
                     <tr key={t.id} style={{ borderBottom: '1px solid #2a2e39' }}>
                       <td style={{ padding: '12px', color: '#787b86' }}>{t.entryDate}</td>
-                      <td style={{ padding: '12px', fontWeight: 'bold', color: '#fff' }}>
-                        {t.type === 'transfer' ? (t.transferType === 'deposit' ? '💳 DÉPÔT' : '📤 RETRAIT') : t.symbol}
-                      </td>
+                      <td style={{ padding: '12px', fontWeight: 'bold', color: '#fff' }}>{t.symbol}</td>
                       <td style={{ padding: '12px' }}>
-                        {t.type === 'trade' ? (
-                          <span style={{ color: t.direction === 'long' ? '#089981' : '#f23645', fontWeight: 'bold' }}>
-                            {t.direction === 'long' ? 'BUY' : 'SELL'}
-                          </span>
-                        ) : (
-                          <span style={{ color: t.transferType === 'deposit' ? '#089981' : '#f59e0b', fontSize: '11px', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#131722' }}>
-                            {t.transferType === 'deposit' ? 'CREDIT' : 'DEBIT'}
-                          </span>
-                        )}
+                        <span style={{ color: t.direction === 'long' ? '#089981' : '#f23645', fontWeight: 'bold' }}>
+                          {t.direction === 'long' ? 'BUY' : 'SELL'}
+                        </span>
                       </td>
-                      <td style={{ padding: '12px', fontWeight: 'bold', color: t.type === 'transfer' ? (t.transferType === 'deposit' ? '#089981' : '#f59e0b') : (t.rawPnl >= 0 ? '#089981' : '#f23645') }}>
-                        {t.type === 'transfer' ? `${t.transferType === 'deposit' ? '+' : '-'}${t.transferAmount.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €` : fmtMoney(t.rawPnl)}
+                      <td style={{ padding: '12px', color: '#787b86' }}>{t.strategy}</td>
+                      <td style={{ padding: '12px', fontWeight: 'bold', color: t.rawPnl >= 0 ? '#089981' : '#f23645' }}>
+                        {fmtMoney(t.rawPnl)}
                       </td>
                       <td style={{ padding: '12px' }}>{t.rr ? `1:${t.rr}` : '—'}</td>
                       <td style={{ padding: '12px' }}>
@@ -290,8 +257,9 @@ export default function App() {
                           <button onClick={() => setSelectedImg(t.screenshot)} style={{ backgroundColor: '#2a2e39', color: '#2962ff', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>
                             🖼️ Voir
                           </button>
-                        ) : (t.notes ? <span style={{ fontSize: '11px', color: '#787b86' }}>{t.notes}</span> : '—')}
+                        ) : '—'}
                       </td>
+                      <td style={{ padding: '12px', color: '#787b86', fontSize: '12px' }}>{t.notes || '—'}</td>
                       <td style={{ padding: '12px', textAlign: 'right' }}>
                         <button onClick={() => deleteTrade(t.id)} style={{ backgroundColor: 'transparent', color: '#f23645', border: 'none', cursor: 'pointer', fontSize: '14px' }}>🗑️</button>
                       </td>
@@ -303,31 +271,13 @@ export default function App() {
           </div>
         </div>
 
-        {/* Modal Nouveau Trade / Dépôt */}
+        {/* Modal Ajouter un Trade */}
         {modalOpen && (
           <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
             <div style={{ backgroundColor: '#1e222d', border: '1px solid #2a2e39', padding: '20px', borderRadius: '8px', width: '420px', maxWidth: '90%' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
-                <h3 style={{ margin: 0, color: '#fff' }}>Nouvelle Entrée</h3>
+                <h3 style={{ margin: 0, color: '#fff' }}>Nouveau Trade</h3>
                 <button onClick={() => setModalOpen(false)} style={{ backgroundColor: 'transparent', color: '#787b86', border: 'none', cursor: 'pointer', fontSize: '16px' }}>✕</button>
-              </div>
-
-              {/* Onglets: Trade vs Dépôt / Retrait */}
-              <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
-                <button 
-                  type="button"
-                  onClick={() => setFormType('trade')} 
-                  style={{ flex: 1, padding: '8px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', backgroundColor: formType === 'trade' ? '#2962ff' : '#2a2e39', color: '#fff' }}
-                >
-                  📈 Trade
-                </button>
-                <button 
-                  type="button"
-                  onClick={() => setFormType('transfer')} 
-                  style={{ flex: 1, padding: '8px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', backgroundColor: formType === 'transfer' ? '#2962ff' : '#2a2e39', color: '#fff' }}
-                >
-                  💳 Dépôt / Retrait
-                </button>
               </div>
 
               <form onSubmit={handleSubmit}>
@@ -336,95 +286,58 @@ export default function App() {
                   <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} style={{ width: '100%', padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px', marginTop: '3px' }} />
                 </div>
 
-                {formType === 'trade' ? (
-                  <>
-                    <div style={{ marginBottom: '10px' }}>
-                      <input type="text" placeholder="Paire (ex: XAUUSD, BTCUSD)" value={symbol} onChange={(e) => setSymbol(e.target.value)} style={{ width: '100%', padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px' }} />
-                    </div>
-                    <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
-                      <button type="button" onClick={() => setDirection('long')} style={{ flex: 1, padding: '8px', border: '1px solid #089981', backgroundColor: direction === 'long' ? '#089981' : 'transparent', color: '#fff', borderRadius: '4px', cursor: 'pointer' }}>BUY</button>
-                      <button type="button" onClick={() => setDirection('short')} style={{ flex: 1, padding: '8px', border: '1px solid #f23645', backgroundColor: direction === 'short' ? '#f23645' : 'transparent', color: '#fff', borderRadius: '4px', cursor: 'pointer' }}>SELL</button>
-                    </div>
-                    <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
-                      <input type="number" step="any" placeholder="P&L (€) ex: 150 ou -50" value={rawPnl} onChange={(e) => setRawPnl(e.target.value)} style={{ flex: 1, padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px' }} />
-                      <input type="number" step="0.1" placeholder="R:R ex: 2.5" value={rr} onChange={(e) => setRr(e.target.value)} style={{ flex: 1, padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px' }} />
-                    </div>
+                <div style={{ marginBottom: '10px' }}>
+                  <input type="text" placeholder="Paire (ex: XAUUSD)" value={symbol} onChange={(e) => setSymbol(e.target.value)} style={{ width: '100%', padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px' }} />
+                </div>
 
-                    {/* Zone de collage + Sélecteur de fichier de secours */}
-                    <div 
-                      style={{ 
-                        border: screenshot ? '2px solid #089981' : '2px dashed #2962ff', 
-                        padding: '12px', 
-                        textAlign: 'center', 
-                        borderRadius: '6px', 
-                        backgroundColor: '#131722', 
-                        marginBottom: '10px'
-                      }}
-                    >
-                      {screenshot ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-                          <img 
-                            src={screenshot} 
-                            alt="Aperçu graphique" 
-                            style={{ maxWidth: '100%', maxHeight: '140px', borderRadius: '4px', border: '1px solid #2a2e39', objectFit: 'contain' }} 
-                          />
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <span style={{ color: '#089981', fontSize: '12px', fontWeight: 'bold' }}>✓ Graphique capturé</span>
-                            <button 
-                              type="button" 
-                              onClick={() => setScreenshot('')}
-                              style={{ backgroundColor: '#f23645', color: '#fff', border: 'none', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
-                            >
-                              Supprimer
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div>
-                          <div style={{ fontSize: '12px', color: '#787b86', marginBottom: '6px' }}>
-                            Fais <b>Ctrl + V</b> directement pour coller le graphique TradingView
-                          </div>
-                          <label style={{ fontSize: '11px', color: '#2962ff', cursor: 'pointer', textDecoration: 'underline' }}>
-                            ou choisis un fichier image
-                            <input type="file" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
-                          </label>
-                        </div>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div style={{ marginBottom: '10px' }}>
-                      <label style={{ fontSize: '11px', color: '#787b86' }}>Type de Mouvement</label>
-                      <select value={transferType} onChange={(e) => setTransferType(e.target.value)} style={{ width: '100%', padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px', marginTop: '3px' }}>
-                        <option value="deposit">💳 Dépôt (+)</option>
-                        <option value="withdrawal">📤 Retrait (-)</option>
-                      </select>
-                    </div>
-                    <div style={{ marginBottom: '10px' }}>
-                      <label style={{ fontSize: '11px', color: '#787b86' }}>Montant (€)</label>
-                      <input type="number" placeholder="ex: 500" value={transferAmount} onChange={(e) => setTransferAmount(e.target.value)} style={{ width: '100%', padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px', marginTop: '3px' }} />
-                    </div>
-                    <div style={{ marginBottom: '10px' }}>
-                      <input type="text" placeholder="Note (Optionnel)" value={notes} onChange={(e) => setNotes(e.target.value)} style={{ width: '100%', padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px' }} />
-                    </div>
-                  </>
-                )}
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+                  <button type="button" onClick={() => setDirection('long')} style={{ flex: 1, padding: '8px', border: '1px solid #089981', backgroundColor: direction === 'long' ? '#089981' : 'transparent', color: '#fff', borderRadius: '4px', cursor: 'pointer' }}>BUY</button>
+                  <button type="button" onClick={() => setDirection('short')} style={{ flex: 1, padding: '8px', border: '1px solid #f23645', backgroundColor: direction === 'short' ? '#f23645' : 'transparent', color: '#fff', borderRadius: '4px', cursor: 'pointer' }}>SELL</button>
+                </div>
 
-                <button type="submit" style={{ width: '100%', backgroundColor: '#2962ff', color: '#fff', border: 'none', padding: '10px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', marginTop: '10px' }}>
-                  Enregistrer
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+                  <input type="number" step="any" placeholder="P&L (€) ex: 150" value={rawPnl} onChange={(e) => setRawPnl(e.target.value)} style={{ flex: 1, padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px' }} />
+                  <input type="number" step="0.1" placeholder="R:R ex: 3" value={rr} onChange={(e) => setRr(e.target.value)} style={{ flex: 1, padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px' }} />
+                </div>
+
+                <div style={{ marginBottom: '10px' }}>
+                  <input type="text" placeholder="Stratégie (ex: ICT / Liquidity Sweep)" value={strategy} onChange={(e) => setStrategy(e.target.value)} style={{ width: '100%', padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px' }} />
+                </div>
+
+                {/* Zone Aperçu Image + Ctrl + V */}
+                <div style={{ border: screenshot ? '2px solid #089981' : '2px dashed #2962ff', padding: '12px', textAlign: 'center', borderRadius: '6px', backgroundColor: '#131722', marginBottom: '10px' }}>
+                  {screenshot ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                      <img src={screenshot} alt="Capture TradingView" style={{ maxWidth: '100%', maxHeight: '130px', borderRadius: '4px', border: '1px solid #2a2e39' }} />
+                      <button type="button" onClick={() => setScreenshot('')} style={{ backgroundColor: '#f23645', color: '#fff', border: 'none', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>
+                        Supprimer la capture
+                      </button>
+                    </div>
+                  ) : (
+                    <span style={{ fontSize: '12px', color: '#787b86' }}>
+                      Appuie sur <b>Ctrl + V</b> pour coller ta capture TradingView
+                    </span>
+                  )}
+                </div>
+
+                <div style={{ marginBottom: '10px' }}>
+                  <input type="text" placeholder="Notes / Observations" value={notes} onChange={(e) => setNotes(e.target.value)} style={{ width: '100%', padding: '8px', backgroundColor: '#131722', border: '1px solid #2a2e39', color: '#fff', borderRadius: '4px' }} />
+                </div>
+
+                <button type="submit" style={{ width: '100%', backgroundColor: '#2962ff', color: '#fff', border: 'none', padding: '10px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', marginTop: '5px' }}>
+                  Ajouter le Trade
                 </button>
               </form>
             </div>
           </div>
         )}
 
-        {/* Modal Grand Format Graphique */}
+        {/* Visionneuse Image Grand Format */}
         {selectedImg && (
           <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: '20px' }}>
             <div style={{ position: 'relative', maxWidth: '90%' }}>
-              <button onClick={() => setSelectedImg(null)} style={{ position: 'absolute', top: '-30px', right: 0, color: '#fff', backgroundColor: 'transparent', border: 'none', cursor: 'pointer', fontSize: '20px' }}>✕ Fermer</button>
-              <img src={selectedImg} alt="TradingView Chart" style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: '6px', border: '1px solid #2a2e39' }} />
+              <button onClick={() => setSelectedImg(null)} style={{ position: 'absolute', top: '-30px', right: 0, color: '#fff', backgroundColor: 'transparent', border: 'none', cursor: 'pointer', fontSize: '18px' }}>✕ Fermer</button>
+              <img src={selectedImg} alt="Graphique Grand Format" style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: '6px', border: '1px solid #2a2e39' }} />
             </div>
           </div>
         )}
